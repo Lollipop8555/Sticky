@@ -8,6 +8,7 @@
 
 import { activeBackground } from '@/app/theme';
 import { hydrateImages } from '@/assets/urls';
+import { setAria, setText, setTitle } from '@/i18n';
 import { lineIcon } from '@/ui/icons';
 import type { NoteRecord } from '@/storage/types';
 
@@ -31,7 +32,8 @@ export function createNoteEl(n: NoteRecord): HTMLElement {
 
   const placeholder = document.createElement('div');
   placeholder.className = 'note-placeholder';
-  placeholder.textContent = '双击输入…';
+  // 卡片只建一次、之后只 patch，所以文案走 data-i18n 指纹：切语言时就地换字，不重建卡片
+  setText(placeholder, 'note.placeholder');
   // 占位符不该抢点击，否则双击落在它上面会"点不到卡"
   placeholder.setAttribute('aria-hidden', 'true');
 
@@ -41,7 +43,7 @@ export function createNoteEl(n: NoteRecord): HTMLElement {
   grip.type = 'button';
   grip.className = 'note-grip';
   grip.setAttribute('data-grip', '');
-  grip.setAttribute('aria-label', '拖动便签');
+  setAria(grip, 'note.drag');
   // 拖拽还没有键盘等价物，先别让它占一个按下去也没反应的 tab 位
   grip.tabIndex = -1;
 
@@ -55,8 +57,8 @@ export function createNoteEl(n: NoteRecord): HTMLElement {
   del.className = 'note-delete';
   del.dataset['act'] = 'trash';
   del.setAttribute('data-no-pan', '');
-  del.setAttribute('aria-label', '移入废纸篓');
-  del.title = '移入废纸篓';
+  setAria(del, 'note.trash');
+  setTitle(del, 'note.trash');
   /*
    * 曾经是字形的 `×`（16px 字号）。和旁边的分享图标并排后才发现：字形墨迹只有
    * 7.4px、描边约 1.7px，而 14px 的分享 SVG 墨迹 10.5px、描边 0.93px —— 一个又粗又小、
@@ -78,8 +80,8 @@ export function createNoteEl(n: NoteRecord): HTMLElement {
   copy.className = 'note-copy';
   copy.dataset['act'] = 'copy';
   copy.setAttribute('data-no-pan', '');
-  copy.setAttribute('aria-label', '复制为图片');
-  copy.title = '复制为图片';
+  setAria(copy, 'note.copy');
+  setTitle(copy, 'note.copy');
   copy.append(
     lineIcon(
       [

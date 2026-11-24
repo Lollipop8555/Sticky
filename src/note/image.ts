@@ -12,13 +12,13 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import BaseImage from '@tiptap/extension-image';
 
 import { applyImageSrc, isAssetSrc } from '@/assets/urls';
-
-const EXTERNAL_LABEL = '外链图片（未加载）';
+import { t } from '@/i18n';
 
 function externalPlaceholder(src: string): HTMLElement {
   const span = document.createElement('span');
   span.className = 'note-img-ext';
-  span.textContent = EXTERNAL_LABEL;
+  // 现取而不是模块常量：占位符是渲染时创建的，切完语言新渲染的卡片就该是新语言
+  span.textContent = t('img.external');
   span.title = src;
   return span;
 }
@@ -57,7 +57,7 @@ export const NoteImage = BaseImage.extend({
     const src = String(node.attrs['src'] ?? '');
 
     if (!isAssetSrc(src)) {
-      return ['span', { class: 'note-img-ext', title: src }, EXTERNAL_LABEL];
+      return ['span', { class: 'note-img-ext', title: src }, t('img.external')];
     }
 
     // parent 的 renderHTML 已经把 src 塞进 HTMLAttributes，这里换成 data-asset

@@ -6,6 +6,8 @@
  * 表现为"这行改了但刷新就没了"这种最难查的 bug。
  */
 
+import { isLocale } from '@/i18n';
+
 import { openDB } from './db';
 import {
   DEFAULT_PREFS,
@@ -65,6 +67,8 @@ export const repo = {
       // 只种了部分字段的行（老库、测试里的局部 seed）留空时按"已经见过"算：
       // 缺字段就把欢迎卡再塞一遍，比"该有的没出现"更烦人
       onboarded: typeof s.onboarded === 'boolean' ? s.onboarded : true,
+      // 老库没有 lang：默认中文，不跟着浏览器语言走（用户没在设置里选过，就不该突然变英文）
+      lang: isLocale(s.lang) ? s.lang : DEFAULT_SETTINGS.lang,
       lastViewport: { ...DEFAULT_VIEWPORT, ...v },
       zCounter: Number.isFinite(c?.zCounter) ? c.zCounter : 0,
       schemaVersion: SCHEMA_VERSION,

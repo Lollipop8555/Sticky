@@ -12,6 +12,7 @@ import { commands } from '@/app/commands';
 import { getPrefs } from '@/app/prefs';
 import { ingestImageFile } from '@/assets/ingest';
 import { toWorld, viewportSize } from '@/canvas/viewport';
+import { t } from '@/i18n';
 import { getEditingId } from '@/note/editing';
 import { toast } from '@/ui/toast';
 
@@ -66,7 +67,11 @@ export async function createImageNotes(files: File[], at: (index: number) => { x
       created += 1;
     } catch (error) {
       console.error('[image] 建卡失败', error);
-      toast(error instanceof Error ? `图片处理失败：${error.message}` : '图片处理失败');
+      toast(
+        error instanceof Error
+          ? t('toast.imageFailedWhy', { why: error.message })
+          : t('toast.imageFailed'),
+      );
     }
   }
 

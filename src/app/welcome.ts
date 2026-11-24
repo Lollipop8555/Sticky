@@ -10,6 +10,7 @@
 
 import { store } from '@/app/store';
 import { toWorld, viewportSize } from '@/canvas/viewport';
+import { t } from '@/i18n';
 
 import { commands } from './commands';
 import { getPrefs, updatePrefs } from './prefs';
@@ -18,17 +19,13 @@ import { getPrefs, updatePrefs } from './prefs';
  * 内容只用 md 里**确定支持**的语法（粗体 / 行内代码 / 有序无序列表）：
  * 标题、引用、代码块都不在 schema 里，写进去会整卡退化成纯文本（见 `note/markdown.ts`）。
  * 列表项之间不能有空行 —— 那就成了"松散列表"，一张卡能多占一屏。
+ *
+ * 正文按**当前界面语言**生成（决策 69）：只有全新库会走到这里，之后它就是用户的正文，
+ * 换语言不重写它 —— 用户在自己便签里写的字，不该被我们翻译。
  */
-export const WELCOME_MD = `**欢迎来到便签墙**
-
-- **双击空白处**：新建一张便签
-- **双击便签**：编辑文字
-- **长按便签再拖**：挪动位置
-- **拖空白处 / 滚轮**：平移画布
-- **⌘ + 滚轮 / 双指捏合**：缩放
-- 右下角 \`+\` 新建，**概览** 一次看全，**设置** 换材质与配色
-
-这张便签看完就可以删掉。`;
+export function welcomeMd(): string {
+  return t('welcome.body');
+}
 
 /**
  * 需要时建一张示例便签，返回它（不需要时返回 null）。
@@ -51,7 +48,7 @@ export function maybeCreateWelcomeNote(): ReturnType<typeof commands.create> | n
   const { width, height } = viewportSize();
   const note = commands.create({
     world: toWorld(width / 2, height / 2),
-    contentMd: WELCOME_MD,
+    contentMd: welcomeMd(),
   });
   // 与建卡同一个节拍落库：用户看到卡就立刻关页面，下次不该再来一张
   updatePrefs({ onboarded: true });

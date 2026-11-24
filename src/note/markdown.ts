@@ -205,8 +205,28 @@ export function docToMd(doc: PMNode): string {
   return serializer.serialize(doc, { tightLists: true }).trimEnd();
 }
 
+/**
+ * 空文本块补一个 `<br>`，对齐 ProseMirror 编辑态的 `br.ProseMirror-trailingBreak`。
+ *
+ * prosemirror-view 会给**每个**空文本块塞那个 `<br>`（`addTextblockHacks`：没有子节点就没有
+ * 行盒，光标无处安放）。`DOMSerializer` 不塞，于是同一个 doc 出来两条不同的 DOM：
+ *
+ * - Chromium 下空 `<li><p></p></li>` 还能靠 marker 撑出一行，看起来"没坏"；
+ * - **Safari（WebKit）下它塌成 0 高** —— 列表末尾那个只有序号、没有正文的 item，序号溢出到
+ *   卡片的 padding 上，用户看到的就是"便签贴着卡片底边"，而一进编辑又多出一行、退出又缩回。
+ *
+ * 决策 68 要求两条渲染路径同高；这次补的正是 ProseMirror 本来就有的那一行，而不是再用 CSS 兜
+ * —— 兜 CSS 只能让 `min-height` 假装有行高，marker 的基线仍然对不上。
+ */
+function fillEmptyTextblocks(fragment: DocumentFragment): DocumentFragment {
+  for (const p of fragment.querySelectorAll('p')) {
+    if (p.childNodes.length === 0) p.append(p.ownerDocument.createElement('br'));
+  }
+  return fragment;
+}
+
 /** 非编辑态渲染：直接由 PM doc 出 DOM，避免再写一条 md→HTML 的路子 */
 export function docToFragment(doc: PMNode): DocumentFragment {
   // 不传 options 时返回的就是 DocumentFragment（传 document 才返回「包装成某文档」的元素）
-  return domSerializer.serializeFragment(doc.content) as DocumentFragment;
+  return fillEmptyTextblocks(domSerializer.serializeFragment(doc.content) as DocumentFragment);
 }

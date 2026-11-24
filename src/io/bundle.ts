@@ -10,6 +10,7 @@
  * `jszip` 走动态 import：导出/导入是低频操作，不该进首屏包。
  */
 
+import { t } from '@/i18n';
 import { collectAssetIds } from '@/trash/trash';
 import { serializeNote, parseNote, type NoteMeta } from '@/io/frontmatter';
 import type { AssetRecord, NoteRecord, PrefsRecord, SettingsRecord, ViewportRecord } from '@/storage/types';
@@ -22,7 +23,8 @@ const MAX_ENTRY_BYTES = 40 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
 
 export class BundleTooLargeError extends Error {
-  constructor(message = '压缩包过大，已中止导入') {
+  // 默认文案在 throw 时才取：这个 message 会被 describeImportError 原样显示给用户
+  constructor(message = t('file.bundleTooLarge')) {
     super(message);
     this.name = 'BundleTooLargeError';
   }
@@ -197,7 +199,11 @@ export async function parseBundle(data: Blob | ArrayBuffer): Promise<ParsedBundl
       if (!id || !ext) continue;
       const blob = await entry.async('blob');
       total += blob.size;
-      if (blob.size > MAX_ENTRY_BYTES) throw new BundleTooLargeError(`单张图片超过 40MB：${entry.name}`);
+      if (blob.size > MAX_ENTRY_BYTES) {
+        throw new BundleTooLargeError(
+          t('file.entryTooLarge', { mb: Math.round(MAX_ENTRY_BYTES / 1024 / 1024), name: entry.name }),
+        );
+      }
       if (total > MAX_TOTAL_BYTES) throw new BundleTooLargeError();
       assets.set(entry.name, { path: entry.name, id, ext: ext.toLowerCase(), blob, meta: metaById.get(id) });
       continue;

@@ -14,6 +14,7 @@ import { getPrefs, setZCounter } from '@/app/prefs';
 import { store } from '@/app/store';
 import { isBackground, isPaletteId, type Background, type PaletteId } from '@/app/theme';
 import { fitAll } from '@/canvas/viewport';
+import { t } from '@/i18n';
 import { downloadBlob } from '@/io/clipboard';
 import { buildBundle, BundleTooLargeError, parseBundle, type ParsedBundle } from '@/io/bundle';
 import { getEditingId, stopEditing } from '@/note/editing';
@@ -186,8 +187,9 @@ export function planImport(input: PlanInput): ImportPlan {
 /* ------------------------------------------------------------------ 偏好清洗 */
 
 /**
- * 包里的 settings 是**不可信输入**：只接受当前版本认识的六个字段，
- * 移动模式这类设备相关设置一律不导入（换台设备不该继承"我上次是手机"）。
+ * 包里的 settings 是**不可信输入**：只接受当前版本认识的这几个字段，
+ * 移动模式、界面语言这类设备相关设置一律不导入（换台设备不该继承"我上次是手机"，
+ * 也不该因为导入了别人的备份就把自己的界面变成英文，见决策 69）。
  */
 export function sanitizeSettings(raw: Partial<SettingsRecord> | undefined): Partial<SettingsRecord> | null {
   if (!raw) return null;
@@ -234,7 +236,7 @@ export async function libraryCounts(): Promise<LibraryCounts> {
 export async function exportLibraryBundle(): Promise<boolean> {
   const notes = [...store.getNotes().values()];
   if (notes.length === 0) {
-    toast('墙上还没有便签');
+    toast(t('toast.wallEmpty'));
     return false;
   }
 
@@ -243,12 +245,12 @@ export async function exportLibraryBundle(): Promise<boolean> {
     const assets = new Map((await repo.loadAssetsAll()).map((asset) => [asset.id, asset]));
     const prefs = getPrefs();
     const blob = await buildBundle(notes, (id) => assets.get(id), prefs);
-    downloadBlob(blob, `便签墙-${today()}.zip`);
-    toast(`已导出 ${notes.length} 张便签`);
+    downloadBlob(blob, `${t('file.wall')}-${today()}.zip`);
+    toast(t('toast.exported', { n: notes.length }));
     return true;
   } catch (error) {
     console.error('[io] 导出失败', error);
-    toast('导出失败，请再试一次');
+    toast(t('toast.bundleExportFailed'));
     return false;
   }
 }
@@ -391,6 +393,6 @@ export async function importLibraryBundle(
 export function describeImportError(error: unknown): string {
   if (error instanceof BundleTooLargeError) return error.message;
   const message = error instanceof Error ? error.message : '';
-  if (/zip|corrupt|central directory|signature/i.test(message)) return '这不是一个有效的 ZIP 备份包';
-  return '导入失败，请检查文件后重试';
+  if (/zip|corrupt|central directory|signature/i.test(message)) return t('toast.badZip');
+  return t('toast.importFailed');
 }

@@ -84,3 +84,29 @@ test('格式条只在编辑态出现，退出即隐藏', async ({ page }) => {
   await expect(page.locator('.note-format')).toBeHidden();
   await expect(page.locator('.note-format')).toHaveCount(0);
 });
+
+test('列表末尾的空 item 在静息态也占一行（进出一编辑高度不变）', async ({ page }) => {
+  await createNote(page);
+
+  // 写到超过 --min-h(320px)：只有内容撑高时，"少一行"才看得出来
+  for (let i = 1; i <= 12; i += 1) {
+    await page.keyboard.type(`${i === 1 ? '1. ' : ''}项目 ${i}`);
+    await page.keyboard.press('Enter');
+  }
+  // 最后一个 Enter 留下第 13 项：只有序号、没有正文 —— Safari 下空 `<li><p></p></li>` 会塌成 0 高
+  const editingCard = await page.locator('.note.is-editing').boundingBox();
+  const editingBody = await page.locator('.note-editor').boundingBox();
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.note-editor')).toHaveCount(0);
+
+  // 关键不变量（决策 68 / 70）：静息渲染必须和编辑态同高，序号不能溢出到卡片底边
+  const restingCard = await page.locator('.note').boundingBox();
+  const restingBody = await page.locator('.note-body').boundingBox();
+  expect(restingBody!.height).toBeCloseTo(editingBody!.height, 0);
+  expect(restingCard!.height).toBeCloseTo(editingCard!.height, 0);
+
+  // 空 item 里要有 ProseMirror 同款的撑行 `<br>`，否则 WebKit 下这一项一行都没有
+  await expect(page.locator('.note-body ol > li')).toHaveCount(13);
+  await expect(page.locator('.note-body ol > li:last-child > p > br')).toHaveCount(1);
+});

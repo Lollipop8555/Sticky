@@ -6,6 +6,7 @@
  * 顺序反过来（先 blob 后 md）最差只是留下一个孤儿资产，由 GC 收走。
  */
 
+import { t } from '@/i18n';
 import { repo } from '@/storage/repo';
 import type { AssetRecord } from '@/storage/types';
 
@@ -16,7 +17,8 @@ const HARD_LIMIT = 12 * 1024 * 1024;
 
 export class ImageTooLargeError extends Error {
   constructor(bytes: number) {
-    super(`图片过大（${Math.round(bytes / 1024)}KB）`);
+    // 现取文案：这个 message 可能被编辑器的兜底 toast 直接显示出去
+    super(t('file.imageTooLarge', { kb: Math.round(bytes / 1024) }));
     this.name = 'ImageTooLargeError';
   }
 }

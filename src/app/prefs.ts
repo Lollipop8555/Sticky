@@ -14,6 +14,7 @@ import {
   type ViewportRecord,
 } from '@/storage/types';
 
+import { applyLocale, isLocale } from '@/i18n';
 import { applyBackground, applyPalette, applyTypography } from './theme';
 
 let current: PrefsRecord = { ...DEFAULT_PREFS, lastViewport: { ...DEFAULT_VIEWPORT } };
@@ -34,16 +35,27 @@ export function applyVisuals(prefs: PrefsRecord = current, doc: Document = docum
 
 /** boot 用：接管读到的偏好并点亮主题。不落库（刚读出来，没必要写回去） */
 export function initPrefs(stored: PrefsRecord, doc: Document = document): void {
-  current = { ...DEFAULT_PREFS, ...stored, lastViewport: { ...stored.lastViewport } };
+  current = {
+    ...DEFAULT_PREFS,
+    ...stored,
+    // 老库没有 lang / 库里被写坏了都兜回中文：语言错了整个界面都是天书，不能靠"缺省解构"碰运气
+    lang: isLocale(stored.lang) ? stored.lang : DEFAULT_PREFS.lang,
+    lastViewport: { ...stored.lastViewport },
+  };
   applyVisuals(current, doc);
+  // 语言先于任何 UI 挂载：boot 后面的 buildControls / 卡片都用 t() 取文案
+  applyLocale(current.lang, doc);
 }
 
 /** 改偏好：同步生效 + 标脏。返回是否有视觉字段变化（调用方可据此决定是否重绘卡片） */
 export function updatePrefs(patch: Partial<SettingsRecord>, doc: Document = document): boolean {
+  const langChanged = isLocale(patch.lang) && patch.lang !== current.lang;
   current = { ...current, ...patch };
 
   const visualChanged = VISUAL_KEYS.some((key) => key in patch);
   if (visualChanged) applyVisuals(current, doc);
+  // 换语言不重绘卡片：卡片上的文案是 data-i18n 指纹，applyLocale 会就地改字（决策 69）
+  if (langChanged) applyLocale(current.lang, doc);
 
   markPrefsDirty();
   return visualChanged;
@@ -84,6 +96,7 @@ export function rememberSettings(): SettingsRecord {
     mobileMode,
     mobilePromptSeen,
     onboarded,
+    lang,
   } = current;
   return {
     background,
@@ -95,6 +108,7 @@ export function rememberSettings(): SettingsRecord {
     mobileMode,
     mobilePromptSeen,
     onboarded,
+    lang,
   };
 }
 

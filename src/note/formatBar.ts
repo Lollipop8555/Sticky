@@ -9,6 +9,7 @@
  * 一旦默认行为发生，焦点从 PM 移走 → 选区塌陷 → 点"粗体"变成"选中当前词再取消选中"。
  */
 
+import { setAria, setText, setTitle, type MessageKey } from '@/i18n';
 import { ICONS, materialIcon } from '@/ui/icons';
 
 import type { EditorHandle, FormatAction, FormatState } from './editor';
@@ -16,7 +17,8 @@ import type { EditorHandle, FormatAction, FormatState } from './editor';
 interface BtnSpec {
   action: FormatAction | 'link';
   icon: readonly string[];
-  title: string;
+  /** 文案键而不是字符串：工具条随编辑会话即时构建，切语言不会留着旧词 */
+  title: MessageKey;
 }
 
 /**
@@ -25,13 +27,13 @@ interface BtnSpec {
  * 图标按钮的语义交给 `title` + `aria-label`，鼠标/读屏都能拿到。
  */
 const BUTTONS: BtnSpec[] = [
-  { action: 'bold', icon: ICONS.bold, title: '粗体（⌘/Ctrl+B）' },
-  { action: 'italic', icon: ICONS.italic, title: '斜体（⌘/Ctrl+I）' },
-  { action: 'strike', icon: ICONS.strike, title: '删除线（⌘/Ctrl+Shift+S）' },
-  { action: 'code', icon: ICONS.code, title: '行内代码（⌘/Ctrl+E）' },
-  { action: 'link', icon: ICONS.link, title: '插入/编辑链接' },
-  { action: 'bulletList', icon: ICONS.bulletList, title: '无序列表' },
-  { action: 'orderedList', icon: ICONS.orderedList, title: '有序列表' },
+  { action: 'bold', icon: ICONS.bold, title: 'fmt.bold' },
+  { action: 'italic', icon: ICONS.italic, title: 'fmt.italic' },
+  { action: 'strike', icon: ICONS.strike, title: 'fmt.strike' },
+  { action: 'code', icon: ICONS.code, title: 'fmt.code' },
+  { action: 'link', icon: ICONS.link, title: 'fmt.link' },
+  { action: 'bulletList', icon: ICONS.bulletList, title: 'fmt.bullet' },
+  { action: 'orderedList', icon: ICONS.orderedList, title: 'fmt.ordered' },
 ];
 
 const isButton = (action: FormatAction | 'link'): action is FormatAction => action !== 'link';
@@ -48,7 +50,7 @@ export function mountFormatBar(card: HTMLElement, handle: EditorHandle): FormatB
   // 画布手势看到它就什么都不做（见 gestures.ts：data-no-pan 早于长按/平移判断）
   bar.setAttribute('data-no-pan', '');
   bar.setAttribute('role', 'toolbar');
-  bar.setAttribute('aria-label', '文本格式');
+  setAria(bar, 'fmt.toolbar');
 
   const buttons = new Map<FormatAction | 'link', HTMLButtonElement>();
 
@@ -58,8 +60,8 @@ export function mountFormatBar(card: HTMLElement, handle: EditorHandle): FormatB
     button.className = 'note-format-btn';
     button.dataset['fmt'] = spec.action;
     button.append(materialIcon(spec.icon));
-    button.title = spec.title;
-    button.setAttribute('aria-label', spec.title);
+    setTitle(button, spec.title);
+    setAria(button, spec.title);
     buttons.set(spec.action, button);
     bar.append(button);
   }
@@ -74,12 +76,12 @@ export function mountFormatBar(card: HTMLElement, handle: EditorHandle): FormatB
   input.inputMode = 'url';
   input.autocomplete = 'off';
   input.placeholder = 'https://…';
-  input.setAttribute('aria-label', '链接地址');
+  setAria(input, 'fmt.linkInput');
 
   const apply = document.createElement('button');
   apply.type = 'submit';
   apply.className = 'note-format-btn note-format-apply';
-  apply.textContent = '应用';
+  setText(apply, 'fmt.apply');
 
   linkForm.append(input, apply);
   bar.append(linkForm);

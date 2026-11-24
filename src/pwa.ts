@@ -9,6 +9,7 @@
 
 import { registerSW } from 'virtual:pwa-register';
 
+import { t } from '@/i18n';
 import { getEditingId, stopEditing } from '@/note/editing';
 import { flush } from '@/storage/writeQueue';
 import { toast } from '@/ui/toast';
@@ -21,9 +22,9 @@ export function registerServiceWorker(): void {
     immediate: true,
     onNeedRefresh() {
       // 绝不静默强刷：用户可能正在写一张卡，刷新等于把他的输入吞掉
-      toast('有新版本 · 刷新即可更新', {
+      toast(t('toast.updateReady'), {
         action: {
-          label: '刷新',
+          label: t('toast.refresh'),
           run: () => {
             // 提示随时可能弹在用户正编辑时：先收笔（会把内容与高度写回 store）、
             // 再冲一次写队列，最后才 reload。少任何一步，最后几百毫秒的输入就没了。

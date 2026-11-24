@@ -13,6 +13,7 @@
  *    而这一步的成本只有一次 IndexedDB 查询。
  */
 
+import { onLocaleChange, setAria, setText, t } from '@/i18n';
 import type { NoteRecord } from '@/storage/types';
 import { relativeTime, trashSummary } from '@/trash/summary';
 import { emptyTrash, listTrash, restoreNote } from '@/trash/trash';
@@ -28,9 +29,7 @@ export interface TrashPanel {
 export const HOLD_MS = 3000;
 const CONFIRM_MS = 3000;
 
-const LABEL_HOLD = '按住 3 秒清空';
-const LABEL_IDLE = '清空废纸篓';
-const LABEL_CONFIRM = '再点一次清空';
+
 
 function el<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
@@ -51,17 +50,19 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
   dialog.setAttribute('aria-labelledby', 'trash-title');
 
   const head = el(doc, 'header', 'sheet-head');
-  const title = el(doc, 'h2', 'sheet-title', '废纸篓');
+  // 静态文案走指纹：面板关着的时候切语言，再打开也是新语言
+  const title = el(doc, 'h2', 'sheet-title');
+  setText(title, 'trash.title');
   title.id = 'trash-title';
   const count = el(doc, 'span', 'trash-count');
   count.setAttribute('aria-live', 'polite');
   const close = el(doc, 'button', 'sheet-close', '×');
   close.type = 'button';
-  close.setAttribute('aria-label', '关闭废纸篓');
+  setAria(close, 'trash.close');
   head.append(title, count, close);
 
   const list = el(doc, 'ul', 'trash-list');
-  const blank = el(doc, 'p', 'trash-blank', '废纸篓是空的');
+  const blank = el(doc, 'p', 'trash-blank', t('trash.empty'));
   const body = el(doc, 'div', 'sheet-body trash-body');
   body.append(blank, list);
 
@@ -69,7 +70,7 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
   const purge = el(doc, 'button', 'btn btn-danger trash-purge');
   purge.type = 'button';
   purge.dataset['act'] = 'purge';
-  const purgeLabel = el(doc, 'span', 'trash-purge-label', reduceMotion ? LABEL_IDLE : LABEL_HOLD);
+  const purgeLabel = el(doc, 'span', 'trash-purge-label');
   purge.append(purgeLabel);
   foot.append(purge);
 
@@ -94,11 +95,11 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
     for (const line of lines) text.append(el(doc, 'p', 'trash-line', line));
     text.append(el(doc, 'p', 'trash-time', relativeTime(record.deletedAt ?? record.updatedAt)));
 
-    const restore = el(doc, 'button', 'btn trash-restore', '恢复');
+    const restore = el(doc, 'button', 'btn trash-restore', t('trash.restore'));
     restore.type = 'button';
     restore.dataset['restore'] = record.id;
     // 概要本身没有语义，读屏只念「恢复」会不知道恢复是哪张
-    restore.setAttribute('aria-label', `恢复便签：${lines[0] ?? ''}`);
+    restore.setAttribute('aria-label', t('trash.restoreAria', { s: lines[0] ?? '' }));
 
     li.append(dot, text, restore);
     return li;
@@ -114,7 +115,7 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
       console.error('[trash] 读取废纸篓失败', error);
       if (mine === version) {
         list.replaceChildren();
-        blank.textContent = '读取废纸篓失败';
+        blank.textContent = t('trash.loadFailed');
         blank.hidden = false;
         purge.disabled = true;
         count.textContent = '';
@@ -123,11 +124,11 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
     }
     if (mine !== version) return;
     list.replaceChildren(...rows.map(row));
-    blank.textContent = '废纸篓是空的';
+    blank.textContent = t('trash.empty');
     blank.hidden = rows.length > 0;
     purge.disabled = rows.length === 0;
     // 数量塞进标题栏而不是另起一行：面板的可用高度全给列表
-    count.textContent = rows.length > 0 ? `${rows.length} 张` : '';
+    count.textContent = rows.length > 0 ? t('trash.count', { n: rows.length }) : '';
   }
 
   // ---------- 恢复 ----------
@@ -141,14 +142,14 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
     btn.disabled = true;
     void restoreNote(id)
       .then(async (result) => {
-        if (result === 'missing') toast('这张便签已经不在废纸篓里了');
+        if (result === 'missing') toast(t('trash.gone'));
         // 原坐标不在视野里才会 relocation —— 必须说一声，否则用户以为恢复失败了
-        else if (result === 'relocated') toast('已放到当前视野');
+        else if (result === 'relocated') toast(t('trash.relocated'));
         await refresh();
       })
       .catch((error: unknown) => {
         console.error('[trash] 恢复失败', error);
-        toast('恢复失败，请再试一次');
+        toast(t('trash.restoreFailed'));
         btn.disabled = false;
       });
   });
@@ -162,6 +163,17 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
   let confirmTimer = 0;
   let armed = false;
   let busy = false;
+
+  // 三种状态共用同一个 label 节点：文案随状态与语言变，所以只能现算，不能挂 data-i18n
+  function paintPurgeLabel(): void {
+    purgeLabel.textContent = armed
+      ? t('trash.purgeConfirm')
+      : reduceMotion
+        ? t('trash.purgeIdle')
+        : t('trash.purgeHold');
+  }
+
+  paintPurgeLabel();
 
   const paint = (p: number): void => {
     purge.style.setProperty('--p', String(Math.min(1, Math.max(0, p))));
@@ -179,7 +191,7 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
   function disarm(): void {
     armed = false;
     window.clearTimeout(confirmTimer);
-    purgeLabel.textContent = LABEL_IDLE;
+    paintPurgeLabel();
     purge.classList.remove('is-armed');
   }
 
@@ -191,14 +203,16 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
       const { removed, freed } = await emptyTrash();
       toast(
         removed === 0
-          ? '废纸篓已经是空的'
-          : `已清空 ${removed} 张便签${freed > 0 ? `，回收 ${freed} 张图片` : ''}`,
+          ? t('trash.alreadyEmpty')
+          : freed > 0
+            ? t('trash.emptiedFreed', { n: removed, m: freed })
+            : t('trash.emptied', { n: removed }),
       );
       disarm();
     } catch (error) {
       // 清空是"删了就没有"的操作，失败必须说出来；按钮交回给 refresh 重新启用
       console.error('[trash] 清空失败', error);
-      toast('清空失败，请再试一次');
+      toast(t('trash.purgeFailed'));
     } finally {
       busy = false;
     }
@@ -268,7 +282,7 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
       if (!armed) {
         armed = true;
         purge.classList.add('is-armed');
-        purgeLabel.textContent = LABEL_CONFIRM;
+        paintPurgeLabel();
         confirmTimer = window.setTimeout(disarm, CONFIRM_MS);
         return;
       }
@@ -304,6 +318,16 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
   dialog.addEventListener('close', () => {
     reset();
     if (armed) disarm();
+  });
+
+  /*
+   * 切语言：面板是单例，标题靠指纹已换好；剩下的都是"按状态现算"的文案
+   * （清空按钮、空态、行内相对时间），关着就先只修空态，打开时 refresh 会重画全表。
+   */
+  onLocaleChange(() => {
+    paintPurgeLabel();
+    if (dialog.open) void refresh();
+    else blank.textContent = t('trash.empty');
   });
 
   return {

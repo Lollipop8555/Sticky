@@ -12,6 +12,7 @@ import History from '@tiptap/extension-history';
 import { Editor } from '@tiptap/core';
 
 import { ImageTooLargeError, ingestImage } from '@/assets/ingest';
+import { t } from '@/i18n';
 import { toast } from '@/ui/toast';
 
 import { docToMd, mdToDoc, noteExtensions } from './markdown';
@@ -85,8 +86,8 @@ export function mountEditor(el: HTMLElement, md: string, handlers: EditorHandler
           .setImage({ src, alt: file.name.replace(/\.[^.]+$/, '') })
           .run();
       } catch (error) {
-        if (error instanceof ImageTooLargeError) toast('图片太大，换一张小一点的');
-        else toast('图片插入失败');
+        if (error instanceof ImageTooLargeError) toast(t('toast.imageTooLarge'));
+        else toast(t('toast.imageInsertFailed'));
         console.warn('[editor] 图片入库失败', error);
       }
     }

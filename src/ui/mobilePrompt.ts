@@ -9,6 +9,7 @@
  */
 
 import { updatePrefs } from '@/app/prefs';
+import { setText } from '@/i18n';
 import type { PrefsRecord } from '@/storage/types';
 import { flush } from '@/storage/writeQueue';
 
@@ -29,12 +30,12 @@ async function ask(doc: Document): Promise<boolean> {
     const title = doc.createElement('h2');
     title.className = 'sheet-title';
     title.id = 'mobile-prompt-title';
-    title.textContent = '开启移动兼容模式？';
+    setText(title, 'prompt.mobileTitle');
     dialog.setAttribute('aria-labelledby', title.id);
 
     const body = doc.createElement('p');
     body.className = 'sheet-text';
-    body.textContent = '图标会变大，并在每张便签顶部常驻拖拽手柄。之后可以在设置里随时改。';
+    setText(body, 'prompt.mobileBody');
 
     // 不用 <form method="dialog">：CSP 里 form-action 'none' 会把表单提交整条掐掉，
     // 而这个面板必须能在最严格的策略下工作。两个按钮直接 close(value) 更直白。
@@ -44,13 +45,13 @@ async function ask(doc: Document): Promise<boolean> {
     const no = doc.createElement('button');
     no.type = 'button';
     no.className = 'btn';
-    no.textContent = '不用了';
+    setText(no, 'prompt.no');
     no.addEventListener('click', () => dialog.close('no'));
 
     const yes = doc.createElement('button');
     yes.type = 'button';
     yes.className = 'btn btn-primary';
-    yes.textContent = '开启';
+    setText(yes, 'prompt.yes');
     yes.addEventListener('click', () => dialog.close('yes'));
 
     actions.append(no, yes);

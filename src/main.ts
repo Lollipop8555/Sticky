@@ -24,6 +24,7 @@ import { attachImageDrop } from '@/note/imageNote';
 import { attachNoteLayer, repaintMountedNotes } from '@/canvas/noteLayer';
 import { attachRender, paint } from '@/canvas/render';
 import { fitAll, onChange, restoreViewport, toWorld, viewportSize } from '@/canvas/viewport';
+import { t } from '@/i18n';
 import { parseBundle } from '@/io/bundle';
 import {
   describeImportError,
@@ -119,7 +120,7 @@ async function boot(): Promise<void> {
       onError: ({ kind, error }) => {
         console.error(`[boot] 写库失败（${kind}）`, error);
         // 静默失败是最糟的一种：用户以为存住了，关掉页面就没了
-        toast(kind === 'quota' ? '存储空间已满，最近的改动没能保存' : '保存失败，最近的改动可能丢失');
+        toast(kind === 'quota' ? t('toast.quota') : t('toast.saveFailed'));
       },
       // 真的写进去过，才去申请持久化存储（浏览器不会主动给，不申请就可能被清）
       onFlushed: () => requestPersistentStorage(),
@@ -191,7 +192,7 @@ async function boot(): Promise<void> {
     settings.close();
     const counts = await libraryCounts();
     if (counts.notes === 0) {
-      toast('墙上还没有便签');
+      toast(t('toast.wallEmpty'));
       return;
     }
     if (!(await confirmExport(counts))) return;

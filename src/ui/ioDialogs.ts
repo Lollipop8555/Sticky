@@ -8,7 +8,8 @@
  * 这些面板必须能在最严格的策略下工作（同 ui/mobilePrompt.ts）。
  */
 
-import { BACKGROUND_LABELS, PALETTE_LABELS } from '@/app/theme';
+import { backgroundLabel, paletteLabel, isBackground, isPaletteId } from '@/app/theme';
+import { t } from '@/i18n';
 import type { ImportResult, LibraryCounts } from '@/io/importFlow';
 import type { SettingsRecord } from '@/storage/types';
 
@@ -25,7 +26,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 /** 无按钮的展示型对话框（汇总）：弹出来即可，不产生返回值 */
-function present(doc: Document, title: string, lines: readonly string[], confirmLabel = '知道了'): void {
+function present(doc: Document, title: string, lines: readonly string[], confirmLabel = t('io.gotIt')): void {
   const dialog = el(doc, 'dialog', 'sheet sheet-prompt');
   const titleEl = el(doc, 'h2', 'sheet-title', title);
   titleEl.id = `dialog-title-${Math.random().toString(36).slice(2, 8)}`;
@@ -102,23 +103,23 @@ function openWithActions(
 export async function confirmExport(counts: LibraryCounts, doc: Document = document): Promise<boolean> {
   const value = await openWithActions(
     doc,
-    '导出整库备份',
+    t('io.exportTitle'),
     (body) => {
-      body.append(el(doc, 'p', 'dialog-line', `导出内容包含墙上全部 ${counts.notes} 张便签及其图片。`));
+      body.append(el(doc, 'p', 'dialog-line', t('io.exportBodyNotes', { n: counts.notes })));
       body.append(
         el(
           doc,
           'p',
           'dialog-line',
           counts.trashed > 0
-            ? `废纸篓中的 ${counts.trashed} 张便签不会被导出。`
-            : '废纸篓为空，没有额外内容会被跳过。',
+            ? t('io.exportSkipTrash', { n: counts.trashed })
+            : t('io.exportNoTrash'),
         ),
       );
     },
     [
-      { label: '取消', value: '' },
-      { label: '导出', value: 'yes', primary: true },
+      { label: t('io.cancel'), value: '' },
+      { label: t('io.export'), value: 'yes', primary: true },
     ],
   );
   return value === 'yes';
@@ -136,17 +137,20 @@ export async function askApplyPrefs(
   let checked = false;
   const value = await openWithActions(
     doc,
-    '导入设置',
+    t('io.prefsTitle'),
     (body) => {
+      // 包里的值来自外部文件，先过一遍类型守卫：坏值不能让界面出现 "背景 undefined"
       const parts: string[] = [];
-      if (settings.background) parts.push(`背景 ${BACKGROUND_LABELS[settings.background] ?? settings.background}`);
-      if (settings.palette) parts.push(`配色 ${PALETTE_LABELS[settings.palette] ?? settings.palette}`);
+      const bg = settings.background;
+      if (isBackground(bg)) parts.push(t('io.prefsBg', { v: backgroundLabel(bg) }));
+      const palette = settings.palette;
+      if (isPaletteId(palette)) parts.push(t('io.prefsPalette', { v: paletteLabel(palette) }));
       body.append(
         el(
           doc,
           'p',
           'dialog-line',
-          parts.length > 0 ? `包里附带的外观设置：${parts.join(' · ')}` : '包里附带了一份外观设置。',
+          parts.length > 0 ? t('io.prefsBodyList', { list: parts.join(' · ') }) : t('io.prefsBodyAny'),
         ),
       );
 
@@ -158,12 +162,12 @@ export async function askApplyPrefs(
       check.addEventListener('change', () => {
         checked = check.checked;
       });
-      row.append(check, el(doc, 'span', undefined, '应用包内的背景与配色'));
+      row.append(check, el(doc, 'span', undefined, t('io.prefsApply')));
       body.append(row);
     },
     [
-      { label: '取消', value: '' },
-      { label: '导入便签', value: 'yes', primary: true },
+      { label: t('io.cancel'), value: '' },
+      { label: t('io.importNotes'), value: 'yes', primary: true },
     ],
   );
   if (value !== 'yes') return null;
@@ -173,28 +177,32 @@ export async function askApplyPrefs(
 /** 汇总：加入多少、改名多少、跳过多少、偏好有没有应用 */
 export function showImportSummary(result: ImportResult, doc: Document = document): void {
   if (result.added === 0) {
-    present(doc, '没有导入任何便签', [
-      '这个包里没有可识别的便签文件。',
-      result.skipped > 0 ? `跳过 ${result.skipped} 个无法解析的文件。` : '请确认选择的是本站导出的 ZIP 备份。',
+    present(doc, t('io.summaryEmptyTitle'), [
+      t('io.summaryEmptyBody'),
+      result.skipped > 0
+        ? t('io.summarySkipped', { n: result.skipped })
+        : t('io.summaryWrongBundle'),
     ]);
     return;
   }
 
-  const lines = [`新增 ${result.added} 张便签。`];
+  const lines = [t('io.summaryAdded', { n: result.added })];
   if (result.renamedNotes > 0) {
-    lines.push(`其中 ${result.renamedNotes} 张因 id 重复，已改名 -1 保存。`);
+    lines.push(t('io.summaryRenamed', { n: result.renamedNotes }));
   }
-  if (result.renamedAssets > 0) lines.push(`图片同步改名 ${result.renamedAssets} 张，正文引用已重写。`);
-  if (result.skipped > 0) lines.push(`跳过 ${result.skipped} 个无法解析的文件。`);
+  if (result.renamedAssets > 0) {
+    lines.push(t('io.summaryAssetsRenamed', { n: result.renamedAssets }));
+  }
+  if (result.skipped > 0) lines.push(t('io.summarySkipped', { n: result.skipped }));
   lines.push(
     !result.hasSettings
-      ? '包里没有外观设置，当前主题保持不变。'
+      ? t('io.summaryNoSettings')
       : result.preferencesApplied
-        ? '偏好：已应用包内的背景与配色。'
-        : '偏好：保持当前外观。',
+        ? t('io.summaryApplied')
+        : t('io.summaryKept'),
   );
 
-  present(doc, '导入完成', lines);
+  present(doc, t('io.summaryTitle'), lines);
 }
 
 /** 选一个 ZIP：`<input type=file>` 是唯一在所有浏览器都能唤起文件选择器的方式 */

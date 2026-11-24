@@ -10,6 +10,7 @@
  */
 
 import { store } from '@/app/store';
+import { t } from '@/i18n';
 import { copyPngWhenReady, downloadBlob, safeFileName } from '@/io/clipboard';
 import { createNoteEl, renderNoteBody } from '@/note/NoteCard';
 import { trashSummary } from '@/trash/summary';
@@ -70,7 +71,7 @@ async function snapshot(node: HTMLElement, width: number, height: number, scale:
     // 卡片圆角之外的区域保持透明：贴进文档里不会带一个白底板
     type: 'image/png',
   });
-  if (!blob) throw new Error('出图返回空');
+  if (!blob) throw new Error('snapshot returned nothing');
   return blob;
 }
 
@@ -119,17 +120,18 @@ export async function exportNoteImage(noteId: string): Promise<void> {
   pending.catch(() => undefined); // 剪贴板路径失败时这里没人接，先兜住
 
   if (await copyPngWhenReady(pending)) {
-    toast('已复制为图片');
+    toast(t('toast.copied'));
     return;
   }
 
   try {
     const blob = await pending;
-    downloadBlob(blob, `${safeFileName(trashSummary(note.contentMd)[0] ?? '', '便签')}.png`);
-    toast('这个浏览器不能直接复制图片，已改为下载');
+    const fallback = t('file.noteFallback');
+    downloadBlob(blob, `${safeFileName(trashSummary(note.contentMd)[0] ?? '', fallback)}.png`);
+    toast(t('toast.copiedFallback'));
   } catch (error) {
     console.error('[png] 出图失败', error);
-    toast('出图失败，请再试一次');
+    toast(t('toast.renderFailed'));
   }
 }
 
@@ -137,7 +139,7 @@ export async function exportNoteImage(noteId: string): Promise<void> {
 export async function exportWallPng(): Promise<void> {
   const notes = [...store.getNotes().values()];
   if (notes.length === 0) {
-    toast('墙上还没有便签');
+    toast(t('toast.wallEmpty'));
     return;
   }
 
@@ -169,11 +171,11 @@ export async function exportWallPng(): Promise<void> {
     const background = getComputedStyle(document.body).backgroundColor || '#f7f5f1';
     const scale = Math.min(PIXEL_RATIO, MAX_SIDE / Math.max(contentWidth, contentHeight));
     const blob = await snapshot(wall, contentWidth, contentHeight, scale, background);
-    downloadBlob(blob, `便签墙-${new Date().toISOString().slice(0, 10)}.png`);
-    toast(`已导出 ${notes.length} 张便签`);
+    downloadBlob(blob, `${t('file.wall')}-${new Date().toISOString().slice(0, 10)}.png`);
+    toast(t('toast.exported', { n: notes.length }));
   } catch (error) {
     console.error('[png] 整墙出图失败', error);
-    toast('出图失败，请再试一次');
+    toast(t('toast.renderFailed'));
   } finally {
     stage.remove();
   }

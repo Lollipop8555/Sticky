@@ -4,6 +4,8 @@
  * 状态在 prefs（storage 层），渲染侧只调 applyXxx。
  */
 
+import { t, type MessageKey } from '@/i18n';
+
 export const BACKGROUNDS = ['paper', 'kraft', 'grid', 'blackboard'] as const;
 export type Background = (typeof BACKGROUNDS)[number];
 
@@ -13,18 +15,29 @@ export type PaletteId = (typeof PALETTE_IDS)[number];
 /**
  * 展示名集中在这里：设置面板与导入时的"包里是什么外观"必须说同一套话，
  * 否则同一份 settings 在两处叫法不同，用户会以为是两回事。
+ *
+ * 存的是**文案键**而不是字符串：切换语言时设置面板里的分段控件要就地换词（决策 69），
+ * 只有键能同时喂给 `setText` 的指纹和 `t()`。
  */
-export const BACKGROUND_LABELS: Record<Background, string> = {
-  paper: '纸白',
-  kraft: '牛皮纸',
-  grid: '网格纸',
-  blackboard: '黑板',
+export const BACKGROUND_LABEL_KEYS: Record<Background, MessageKey> = {
+  paper: 'bg.paper',
+  kraft: 'bg.kraft',
+  grid: 'bg.grid',
+  blackboard: 'bg.blackboard',
 };
 
-export const PALETTE_LABELS: Record<PaletteId, string> = {
-  macaron: '马卡龙',
-  monet: '莫奈',
+export const PALETTE_LABEL_KEYS: Record<PaletteId, MessageKey> = {
+  macaron: 'palette.macaron',
+  monet: 'palette.monet',
 };
+
+export function backgroundLabel(bg: Background): string {
+  return t(BACKGROUND_LABEL_KEYS[bg]);
+}
+
+export function paletteLabel(palette: PaletteId): string {
+  return t(PALETTE_LABEL_KEYS[palette]);
+}
 
 /**
  * 与 tokens.css 里的 --canvas 必须一致；改色时两边一起改。

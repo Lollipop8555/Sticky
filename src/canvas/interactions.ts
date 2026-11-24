@@ -17,6 +17,7 @@
 import { commands } from '@/app/commands';
 import { getPrefs } from '@/app/prefs';
 import type { AppShell } from '@/app/shell';
+import { t } from '@/i18n';
 
 import { getEditingId, startEditing, stopEditing } from '@/note/editing';
 import { openLightbox } from '@/note/lightbox';
@@ -122,18 +123,18 @@ export function attachInteractions(shell: AppShell): () => void {
     event.stopPropagation();
 
     if (!trashNote(id)) return;
-    toast('已移到废纸篓', {
+    toast(t('toast.trashed'), {
       // 撤销走"原地放回"：3 秒内视野不会动，restoreNote 自然判定为 inView
       action: {
-        label: '撤销',
+        label: t('toast.undo'),
         run: () => {
           void restoreNote(id)
             .then((result) => {
-              if (result === 'missing') toast('这张便签已经不在废纸篓里了');
+              if (result === 'missing') toast(t('trash.gone'));
             })
             .catch((error: unknown) => {
               console.error('[trash] 撤销失败', error);
-              toast('撤销失败，去废纸篓里找找');
+              toast(t('toast.undoFailed'));
             });
         },
       },

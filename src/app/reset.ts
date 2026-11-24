@@ -9,6 +9,7 @@
  * 只在显式带参数时触发：正常访问一律不动数据。
  */
 
+import { t } from '@/i18n';
 import { DB_NAME, closeDB } from '@/storage/db';
 
 export type ResetOutcome = 'none' | 'reloading' | 'blocked';
@@ -22,7 +23,8 @@ export async function resetLocalDataIfRequested(): Promise<ResetOutcome> {
 
   if (!removed) {
     // 别的标签页 / 已安装的 PWA 窗口还握着连接：这时删不掉，硬重载只会把数据写回来
-    document.body.textContent = '还有其它便签墙页面开着，请全部关掉后重新访问 /?reset=1';
+    // 这一刻 prefs 还没读，所以只能按默认语言说 —— 这条提示是开发/维护路径，不值得为它先把库打开
+    document.body.textContent = t('reset.blocked');
     return 'blocked';
   }
 

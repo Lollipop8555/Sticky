@@ -4,6 +4,7 @@
  */
 
 import type { Background, PaletteId } from '@/app/theme';
+import type { Locale } from '@/i18n';
 
 export interface NoteRecord {
   id: string;
@@ -54,6 +55,11 @@ export interface SettingsRecord {
    * 不是可调偏好，也不随库导出：它的唯一职责是"别每次都往空墙上塞一张欢迎卡"。
    */
   onboarded: boolean;
+  /**
+   * 界面语言（决策 69）。默认中文；英文只翻界面文案，**不动**已存在的便签正文。
+   * 它是"这台设备怎么看"的偏好，所以不随 ZIP 导出/导入走。
+   */
+  lang: Locale;
 }
 
 export interface ViewportRecord {
@@ -87,6 +93,7 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   mobilePromptSeen: false,
   // 默认 false：全新库里该由 boot 放进那张示例便签。老库由 migrate / loadPrefs 兜成 true
   onboarded: false,
+  lang: 'zh',
 };
 
 export const DEFAULT_VIEWPORT: ViewportRecord = { panX: 0, panY: 0, scale: 1 };

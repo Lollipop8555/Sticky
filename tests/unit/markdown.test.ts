@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { docToMd, mdToDoc } from '@/note/markdown';
+import { docToFragment, docToMd, mdToDoc } from '@/note/markdown';
 
 /** 语义相等：md 允许有等价的多种写法，比较解析后的 doc 才是真正的不变量 */
 function sameDoc(a: string, b: string): boolean {
@@ -139,5 +139,30 @@ describe('markdown ⇄ doc', () => {
     const doc = mdToDoc('a\n\nb');
     const md = docToMd(doc);
     expect(md.split('\n\n')).toHaveLength(2);
+  });
+
+  it('静息渲染给空文本块补 `<br>`（对齐 ProseMirror，否则 Safari 下塌成 0 高）', () => {
+    // 列表末尾那个"只有序号、没有正文"的 item：md 里是 `- ` / `2. `
+    const frag = docToFragment(mdToDoc('- 第一项\n- '));
+    const list = frag.querySelector('ul');
+    expect(list?.children).toHaveLength(2);
+
+    const emptyP = list?.lastElementChild?.querySelector('p');
+    expect(emptyP?.childNodes).toHaveLength(1);
+    expect(emptyP?.firstElementChild?.nodeName).toBe('BR');
+
+    // 有正文的段落不该被塞 br（塞了就多出一行）
+    const first = list?.firstElementChild?.querySelector('p');
+    expect(first?.firstElementChild?.nodeName).not.toBe('BR');
+    expect(first?.querySelector('br')).toBeNull();
+  });
+
+  it('有序列表末尾空项同样补 `<br>`，且不影响 markdown 往返', () => {
+    const md = '1. 第一项\n2. ';
+    const frag = docToFragment(mdToDoc(md));
+    expect(frag.querySelector('ol > li:last-child > p > br')).not.toBeNull();
+    // 补 br 只发生在渲染出来的 DOM 上，contentMd 不受影响（二次往返稳定）
+    const once = docToMd(mdToDoc(md));
+    expect(docToMd(mdToDoc(once))).toBe(once);
   });
 });

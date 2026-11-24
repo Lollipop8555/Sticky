@@ -11,6 +11,7 @@
 
 import { repo } from '@/storage/repo';
 import { assetIdOf } from '@/assets/urls';
+import { t } from '@/i18n';
 
 const MAX_SCALE = 8;
 /** 按下与松开差这么多就算拖动过，不再当成"点背景关闭" */
@@ -54,7 +55,8 @@ async function show(id: string, alt: string): Promise<void> {
 
   const hint = document.createElement('p');
   hint.className = 'lightbox-hint';
-  hint.textContent = '滚轮缩放 · 拖动平移 · 双击 1:1 · Esc 关闭';
+  // 每次打开现取：预览是临时对话框，语言切换只可能是"关着的时候"，不需要订阅
+  hint.textContent = t('lightbox.hint');
 
   dialog.append(img, hint);
   document.body.append(dialog);

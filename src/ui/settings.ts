@@ -4,9 +4,24 @@
  * **没有"保存"按钮**：每个控件 change 就写回 prefs，由 main 注入的 `onPrefs`
  * 负责落库与副作用。面板自己不持有状态 —— 它只是 prefs 的一个视图，
  * 这样"设置里改的"和"别处改的"永远是同一个真相。
+ *
+ * 文案（决策 69）：静态标签挂 `data-i18n` 指纹，切语言时 `applyLocale` 全局重写一遍，
+ * 面板**不重建**（重建会丢展开状态、滚动位置和焦点）；带数字的两处（用量、版本号）
+ * 订阅 `onLocaleChange` 自己重算。
  */
 
-import { BACKGROUND_LABELS, BACKGROUNDS, PALETTE_IDS, PALETTE_LABELS } from '@/app/theme';
+import {
+  LOCALES,
+  LOCALE_LABELS,
+  onLocaleChange,
+  setAria,
+  setText,
+  setTitle,
+  t,
+  type Locale,
+  type MessageKey,
+} from '@/i18n';
+import { BACKGROUND_LABEL_KEYS, BACKGROUNDS, PALETTE_IDS, PALETTE_LABEL_KEYS } from '@/app/theme';
 import type { PrefsRecord, SettingsRecord } from '@/storage/types';
 
 export interface SettingsOptions {
@@ -51,23 +66,46 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function section(doc: Document, title: string): HTMLElement {
+/** 带文案键的元素：建的时候就写值，切语言由 localize 按指纹重写 */
+function txt<K extends keyof HTMLElementTagNameMap>(
+  doc: Document,
+  tag: K,
+  className: string,
+  key: MessageKey,
+): HTMLElementTagNameMap[K] {
+  const node = el(doc, tag, className);
+  setText(node, key);
+  return node;
+}
+
+function section(doc: Document, titleKey: MessageKey): HTMLElement {
   const sec = el(doc, 'section', 'sheet-section');
-  sec.append(el(doc, 'h3', 'sheet-subtitle', title));
+  sec.append(txt(doc, 'h3', 'sheet-subtitle', titleKey));
   return sec;
+}
+
+/**
+ * 选项标签：多数是文案键（切语言要变），语言名是字面量（"中文"/"English" 不翻译）。
+ * 用联合类型而不是 "空 key 就原样输出"，免得哪天漏了键把 `settings.foo` 显示到界面上。
+ */
+type LabelRef = MessageKey | { literal: string };
+
+function paintLabel(node: Element, ref: LabelRef): void {
+  if (typeof ref === 'string') setText(node, ref);
+  else node.textContent = ref.literal;
 }
 
 /** 单选组：语义上是 fieldset + radio，视觉上是分段控件 */
 function segmented<T extends string>(
   doc: Document,
   field: keyof SettingsRecord,
-  legend: string,
+  legendKey: MessageKey,
   values: readonly T[],
-  label: (v: T) => string,
+  label: (v: T) => LabelRef,
 ): HTMLFieldSetElement {
   const fs = el(doc, 'fieldset', 'field');
   fs.dataset['field'] = field;
-  fs.append(el(doc, 'legend', 'field-legend', legend));
+  fs.append(txt(doc, 'legend', 'field-legend', legendKey));
 
   const opts = el(doc, 'div', 'opts');
   for (const v of values) {
@@ -77,42 +115,60 @@ function segmented<T extends string>(
     input.name = field;
     input.value = v;
     input.dataset['field'] = field;
-    labelEl.append(input, el(doc, 'span', undefined, label(v)));
+    const text = el(doc, 'span');
+    paintLabel(text, label(v));
+    labelEl.append(input, text);
     opts.append(labelEl);
   }
   fs.append(opts);
   return fs;
 }
 
+/** 用量文案是异步来的 + 带数字，只能自己维护状态再重绘，不能靠指纹 */
+type UsageState =
+  | { kind: 'pending' }
+  | { kind: 'unavailable' }
+  | { kind: 'used'; used: number; quota?: number };
+
 export function mountSettings(options: SettingsOptions, doc: Document = document): SettingsPanel {
   const dialog = el(doc, 'dialog', 'sheet sheet-settings');
   dialog.setAttribute('aria-labelledby', 'settings-title');
 
   const head = el(doc, 'header', 'sheet-head');
-  const title = el(doc, 'h2', 'sheet-title', '设置');
+  const title = txt(doc, 'h2', 'sheet-title', 'settings.title');
   title.id = 'settings-title';
   const close = el(doc, 'button', 'sheet-close', '×');
   close.type = 'button';
-  close.setAttribute('aria-label', '关闭设置');
+  setAria(close, 'settings.close');
+  setTitle(close, 'settings.close');
   head.append(title, close);
 
   const body = el(doc, 'div', 'sheet-body');
 
+  // ---- 语言 ----
+  // 放最前：英文用户第一次进设置时，得先看得懂"Language"才能改别的（语言名本身不翻译）
+  const language = section(doc, 'settings.language');
+  language.append(
+    segmented<Locale>(doc, 'lang', 'settings.languageField', LOCALES, (v) => ({
+      literal: LOCALE_LABELS[v],
+    })),
+  );
+
   // ---- 外观 ----
-  const look = section(doc, '外观');
+  const look = section(doc, 'settings.appearance');
   look.append(
-    segmented(doc, 'background', '背景', BACKGROUNDS, (v) => BACKGROUND_LABELS[v]),
-    segmented(doc, 'palette', '新便签配色', PALETTE_IDS, (v) => PALETTE_LABELS[v]),
+    segmented(doc, 'background', 'settings.background', BACKGROUNDS, (v) => BACKGROUND_LABEL_KEYS[v]),
+    segmented(doc, 'palette', 'settings.palette', PALETTE_IDS, (v) => PALETTE_LABEL_KEYS[v]),
   );
 
   // ---- 交互 ----
-  const feel = section(doc, '交互');
+  const feel = section(doc, 'settings.feel');
   feel.append(
-    segmented(doc, 'wheelMode', '滚轮', ['pan', 'zoom'] as const, (v) =>
-      v === 'pan' ? '平移画布' : '缩放画布',
+    segmented(doc, 'wheelMode', 'settings.wheel', ['pan', 'zoom'] as const, (v) =>
+      v === 'pan' ? 'settings.wheelPan' : 'settings.wheelZoom',
     ),
-    segmented(doc, 'createMode', '新建方式', ['dblclick', 'fab'] as const, (v) =>
-      v === 'dblclick' ? '双击空白' : '右下角 ＋',
+    segmented(doc, 'createMode', 'settings.createMode', ['dblclick', 'fab'] as const, (v) =>
+      v === 'dblclick' ? 'settings.createDbl' : 'settings.createFab',
     ),
   );
 
@@ -120,25 +176,27 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   const mobileInput = el(doc, 'input');
   mobileInput.type = 'checkbox';
   mobileInput.dataset['field'] = 'mobileMode';
-  const mobileText = el(doc, 'span', undefined, '移动兼容模式');
-  const mobileHint = el(doc, 'small', 'opt-hint', '图标放大，手柄常驻');
+  const mobileText = txt(doc, 'span', '', 'settings.mobile');
+  const mobileHint = txt(doc, 'small', 'opt-hint', 'settings.mobileHint');
   mobileRow.append(mobileInput, mobileText, mobileHint);
   feel.append(mobileRow);
 
   // ---- 数据 ----
-  const data = section(doc, '数据');
-  const usage = el(doc, 'p', 'usage', '正在统计…');
+  const data = section(doc, 'settings.data');
+  const usage = el(doc, 'p', 'usage');
   usage.setAttribute('data-act', 'usage');
+  let usageState: UsageState = { kind: 'pending' };
+
   const row = el(doc, 'div', 'sheet-row');
-  const exportBtn = el(doc, 'button', 'btn data-export', '导出 ZIP');
+  const exportBtn = txt(doc, 'button', 'btn data-export', 'settings.exportZip');
   exportBtn.type = 'button';
-  exportBtn.title = '把墙上全部便签与图片打包下载（不含废纸篓）';
-  const importBtn = el(doc, 'button', 'btn data-import', '导入 ZIP');
+  setTitle(exportBtn, 'settings.exportZipTitle');
+  const importBtn = txt(doc, 'button', 'btn data-import', 'settings.importZip');
   importBtn.type = 'button';
-  importBtn.title = '从备份包追加便签，不会覆盖现有内容';
-  const wallBtn = el(doc, 'button', 'btn data-wall', '导出整墙图片');
+  setTitle(importBtn, 'settings.importZipTitle');
+  const wallBtn = txt(doc, 'button', 'btn data-wall', 'settings.exportWall');
   wallBtn.type = 'button';
-  wallBtn.title = '按当前便签布局导出一张大图';
+  setTitle(wallBtn, 'settings.exportWallTitle');
   const row2 = el(doc, 'div', 'sheet-row');
   row.append(exportBtn, importBtn);
   row2.append(wallBtn);
@@ -150,25 +208,46 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
 
   // ---- 帮助 ----
   const details = el(doc, 'details', 'sheet-help');
-  details.append(el(doc, 'summary', undefined, '帮助'));
+  details.append(txt(doc, 'summary', '', 'settings.help'));
   const help = el(doc, 'ul', 'help-list');
-  const tips = [
-    '双击空白：新建便签；双击便签：编辑',
-    '长按便签（桌面 0.4s / 触摸 0.3s）或按住顶部手柄：拖动',
-    '滚轮：按设置平移或缩放；Ctrl/⌘ + 滚轮：始终缩放',
-    'Esc：关闭窗口 / 取消拖动 / 退出编辑',
-    '删除：卡片右上角 × 移入废纸篓，3 秒内可撤销',
-    '废纸篓（左下）：恢复便签；按住「清空」3 秒才真的清空',
-    '拖入或粘贴图片：建一张图片便签；单击图片看大图',
-    '复制：卡片右上角复制按钮把便签变成图片放进剪贴板',
+  const tips: readonly MessageKey[] = [
+    'settings.helpTip1',
+    'settings.helpTip2',
+    'settings.helpTip3',
+    'settings.helpTip4',
+    'settings.helpTip5',
+    'settings.helpTip6',
+    'settings.helpTip7',
+    'settings.helpTip8',
   ];
-  for (const t of tips) help.append(el(doc, 'li', undefined, t));
-  const version = el(doc, 'p', 'help-version', `版本 ${__APP_VERSION__}`);
+  for (const key of tips) help.append(txt(doc, 'li', '', key));
+  const version = el(doc, 'p', 'help-version');
   details.append(help, version);
 
-  body.append(look, feel, data, details);
+  body.append(language, look, feel, data, details);
   dialog.append(head, body);
   doc.body.append(dialog);
+
+  function paintUsage(): void {
+    usage.textContent =
+      usageState.kind === 'pending'
+        ? t('settings.usagePending')
+        : usageState.kind === 'unavailable'
+          ? t('settings.usageUnavailable')
+          : usageState.quota !== undefined
+            ? t('settings.usageOf', {
+                used: formatBytes(usageState.used),
+                quota: formatBytes(usageState.quota),
+              })
+            : t('settings.usageUsed', { used: formatBytes(usageState.used) });
+  }
+
+  function paintVersion(): void {
+    version.textContent = t('settings.version', { v: __APP_VERSION__ });
+  }
+
+  paintUsage();
+  paintVersion();
 
   function refresh(): void {
     const prefs = options.getPrefs();
@@ -186,16 +265,18 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
       const used = est?.usage;
       const quota = est?.quota;
       if (typeof used !== 'number') {
-        usage.textContent = '存储用量不可用';
-        return;
+        usageState = { kind: 'unavailable' };
+      } else {
+        usageState = {
+          kind: 'used',
+          used,
+          quota: typeof quota === 'number' && quota > 0 ? quota : undefined,
+        };
       }
-      usage.textContent =
-        typeof quota === 'number' && quota > 0
-          ? `已用 ${formatBytes(used)} / 配额 ${formatBytes(quota)}`
-          : `已用 ${formatBytes(used)}`;
     } catch {
-      usage.textContent = '存储用量不可用';
+      usageState = { kind: 'unavailable' };
     }
+    paintUsage();
   }
 
   // 事件委托：面板里的控件会变，逐个挂监听器就是给自己找漏挂的机会
@@ -215,14 +296,18 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
     if (event.target === dialog) dialog.close();
   });
   close.addEventListener('click', () => dialog.close());
-  // 每次打开都回填一次：设置可能在别处被改过，面板不能显示上一个会话的选中项
-  dialog.addEventListener('close', () => {
-    // 焦点回到触发它的按钮由浏览器管；这里只清临时状态
+
+  // 面板是单例、活到页面结束，所以不需要解绑；解了反而会让"切语言后面板还是旧文案"
+  onLocaleChange(() => {
+    paintUsage();
+    paintVersion();
   });
 
   return {
     open() {
       refresh();
+      usageState = { kind: 'pending' };
+      paintUsage();
       void refreshUsage();
       if (!dialog.open) dialog.showModal();
     },

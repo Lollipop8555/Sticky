@@ -16,6 +16,7 @@
 
 import { getPrefs } from '@/app/prefs';
 import { store } from '@/app/store';
+import { onLocaleChange, setAria, setTitle, t } from '@/i18n';
 import { ICONS, lineIcon, materialIcon } from '@/ui/icons';
 
 export interface ControlsOptions {
@@ -41,8 +42,8 @@ function mountTrashAnchor(doc: Document): HTMLElement {
   el.type = 'button';
   el.className = 'trash-anchor';
   el.setAttribute('data-no-pan', '');
-  el.setAttribute('aria-label', '废纸篓');
-  el.title = '废纸篓（恢复或清空已删除的便签）';
+  setAria(el, 'ctl.trash');
+  setTitle(el, 'ctl.trashTitle');
   el.append(lineIcon(['M4 7h16', 'M9 7V5h6v2', 'M6 7l1 13h10l1-13', 'M10 11v5', 'M14 11v5']));
   return el;
 }
@@ -60,8 +61,8 @@ export function mountControls(
   fab.type = 'button';
   fab.className = 'fab';
   fab.dataset['act'] = 'create';
-  fab.setAttribute('aria-label', '新建便签');
-  fab.title = '新建便签（双击空白也可以）';
+  setAria(fab, 'ctl.create');
+  setTitle(fab, 'ctl.createTitle');
   fab.append(materialIcon(ICONS.add));
 
   // 常驻区：概览（图标 + 数量胶囊）与设置，横排一行
@@ -84,8 +85,8 @@ export function mountControls(
   settingsBtn.type = 'button';
   settingsBtn.className = 'ctl';
   settingsBtn.dataset['act'] = 'settings';
-  settingsBtn.setAttribute('aria-label', '设置');
-  settingsBtn.title = '设置';
+  setAria(settingsBtn, 'ctl.settings');
+  setTitle(settingsBtn, 'ctl.settings');
   settingsBtn.append(materialIcon(ICONS.settings));
 
   dock.append(overview, settingsBtn);
@@ -107,17 +108,20 @@ export function mountControls(
     fab.hidden = !(prefs.mobileMode || prefs.createMode === 'fab');
     const n = store.count();
     count.textContent = String(n);
-    overview.setAttribute('aria-label', `查看全部（${n} 张便签）`);
-    overview.title = `查看全部（${n} 张）`;
+    // 带数字，且每次便签数变化都要重算 —— 不走 data-i18n 指纹，交给 onLocaleChange 重跑 sync
+    overview.setAttribute('aria-label', t('ctl.overviewAria', { n }));
+    overview.title = t('ctl.overviewTitle', { n });
   }
 
   sync();
   const offNotes = store.subscribeNotes(sync);
+  const offLocale = onLocaleChange(sync);
 
   return {
     sync,
     detach() {
       offNotes();
+      offLocale();
       wrap.remove();
       trash.remove();
     },
