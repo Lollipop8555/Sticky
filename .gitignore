@@ -1,0 +1,10 @@
+/plans
+
+node_modules/
+dist/
+.vite/
+test-results/
+playwright-report/
+tests/e2e/.state/
+*.local
+.DS_Store

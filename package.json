@@ -1,0 +1,51 @@
+{
+  "name": "sticky-wall",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "perf": "playwright test --config playwright.perf.config.ts"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.27.3",
+    "@tiptap/extension-bold": "^2.27.3",
+    "@tiptap/extension-bullet-list": "^2.27.3",
+    "@tiptap/extension-code": "^2.27.3",
+    "@tiptap/extension-document": "^2.27.3",
+    "@tiptap/extension-history": "^2.27.3",
+    "@tiptap/extension-image": "^2.27.3",
+    "@tiptap/extension-italic": "^2.27.3",
+    "@tiptap/extension-link": "^2.27.3",
+    "@tiptap/extension-list-item": "^2.27.3",
+    "@tiptap/extension-ordered-list": "^2.27.3",
+    "@tiptap/extension-paragraph": "^2.27.3",
+    "@tiptap/extension-strike": "^2.27.3",
+    "@tiptap/extension-text": "^2.27.3",
+    "@tiptap/pm": "^2.27.3",
+    "idb": "^8.0.2",
+    "jszip": "^3.10.1",
+    "modern-screenshot": "^4.6.0",
+    "prosemirror-markdown": "^1.14.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/markdown-it": "^14.2.0",
+    "@types/node": "^22.10.2",
+    "fake-indexeddb": "^6.2.8",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^2.1.8"
+  }
+}

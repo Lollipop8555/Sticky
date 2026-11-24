@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN" data-background="paper" data-palette="macaron">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <!--
+      CSP（io-persistence §3.4）：无 eval、无外部源。
+      connect-src 放开 ws: 仅为 Vite HMR 服务；生产构建不会发起任何 websocket。
+      style-src 需要 unsafe-inline，因为卡片位置/颜色都写在 style 属性上。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="theme-color" content="#F5F2EC" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="无限画布上的便签墙，数据只存在你自己的浏览器里。" />
+    <!-- manifest 由 vite-plugin-pwa 在构建时注入（dev 下没有，所以这里不手写 link） -->
+    <link rel="icon" href="/icons/icon-192.png" sizes="192x192" />
+    <!-- iOS 不读 manifest 的图标：主屏书签只认 apple-touch-icon -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="便签墙" />
+    <title>无限墙便签</title>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <div class="viewport" id="viewport">
+        <div class="world" id="world">
+          <div class="note-layer" id="note-layer"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

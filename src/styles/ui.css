@@ -1,0 +1,870 @@
+/*
+ * 控件层（impl-04）：悬浮控件、设置面板、提示条、废纸篓占位。
+ *
+ * 全部 `position: fixed` 且在世界层之外 —— 画布的 transform/事件都不该碰到它们。
+ * 颜色一律走 tokens.css 的 --ui-*，四种背景的对比度由令牌负责，这里不写死色值。
+ *
+ * 移动模式只有一份 DOM：`[data-mobile='1']` 挂在 <html> 上（`data-background` 也在那儿），
+ * 因为控件与 toast 挂在 body、不在 #app 里，选择器必须能一路匹配下来。
+ */
+
+/* ---------- 悬浮控件 ---------- */
+
+/*
+ * 右下角分两组（决策 64）：
+ * - 功能按钮 = FAB，主动作，实心强调色 + 投影；
+ * - 常驻按钮 = 概览/设置，中性胶囊、**不投影**。
+ * 纵向 column + `align-items: flex-end`：右缘对齐，FAB 正落在"设置"上方；
+ * 两组之间 10px、组内 6px，靠间距而不是分割线区分层级。
+ */
+.controls {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: var(--z-controls);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.controls-dock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fab {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  color: #fff;
+  box-shadow: var(--ui-shadow-2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+.fab svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* UA 的 [hidden] 是 display:none，但上面写了 display:grid，必须显式压回来 */
+.fab[hidden] {
+  display: none;
+}
+
+.fab:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 32px rgb(37 99 235 / 32%),
+    var(--ui-shadow-2);
+}
+
+.fab:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.ctl {
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-pill);
+  background: var(--ui-surface);
+  color: var(--ui-fg);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    background var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.ctl:hover {
+  background: var(--ui-surface-solid);
+  transform: translateY(-1px);
+}
+
+.ctl svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* 概览 = 图标 + 数量：图标说明"这是什么"，数量是它右侧的无阴影胶囊标签 */
+.ctl-overview {
+  padding: 0 10px 0 9px;
+}
+
+.ctl-count {
+  min-width: 20px;
+  padding: 3px 6px;
+  border-radius: var(--radius-pill);
+  /* 用边框色当底色：浅色下是 10% 黑、黑板下是 12% 白，不用再写一条深色规则 */
+  background: var(--ui-border);
+  color: var(--ui-fg-soft);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+}
+
+/* 键盘用户必须看得见焦点，鼠标用户不该看见 */
+.ctl:focus-visible,
+.fab:focus-visible,
+.trash-anchor:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- 废纸篓入口（M2 起可用） ---------- */
+
+.trash-anchor {
+  position: fixed;
+  left: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: var(--z-controls);
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  background: var(--ui-surface);
+  color: var(--ui-fg-soft);
+  box-shadow: var(--ui-shadow-1);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+
+.trash-anchor:hover {
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg);
+}
+
+.trash-anchor svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- 移动模式：同一份 DOM，只放大 ---------- */
+
+[data-mobile='1'] .controls {
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  gap: 12px;
+}
+
+[data-mobile='1'] .controls-dock {
+  gap: 8px;
+}
+
+[data-mobile='1'] .fab {
+  width: 56px;
+  height: 56px;
+}
+
+[data-mobile='1'] .fab svg {
+  width: 28px;
+  height: 28px;
+}
+
+[data-mobile='1'] .ctl {
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+}
+
+[data-mobile='1'] .ctl-overview {
+  padding: 0 12px 0 11px;
+}
+
+[data-mobile='1'] .ctl svg {
+  width: 20px;
+  height: 20px;
+}
+
+[data-mobile='1'] .ctl-count {
+  min-width: 24px;
+  padding: 4px 7px;
+  font-size: 13px;
+}
+
+[data-mobile='1'] .trash-anchor {
+  width: 48px;
+  height: 48px;
+  left: 12px;
+}
+
+/* 移动模式手柄常驻：触摸屏没有 hover，藏起来等于这条拖动入口不存在 */
+[data-mobile='1'] .note-grip {
+  opacity: 0.35;
+}
+
+/* ---------- 面板 / 抽屉 ---------- */
+
+.sheet {
+  position: fixed;
+  /* 桌面：贴在控件上方，右下角 */
+  inset: auto 24px 96px auto;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 560px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-lg);
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg);
+  box-shadow: var(--ui-shadow-2);
+  overflow: hidden;
+  animation: sheet-in var(--dur-base) var(--ease);
+}
+
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet::backdrop {
+  background: rgb(17 24 39 / 16%);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+
+.sheet-title {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.sheet-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui-fg-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sheet-close:hover {
+  background: var(--ui-border);
+}
+
+.sheet-body {
+  padding: 0 16px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sheet-section + .sheet-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.sheet-subtitle {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-fg-soft);
+}
+
+.sheet-text {
+  margin: 0 0 18px;
+  padding: 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-fg-soft);
+}
+
+.sheet-prompt {
+  inset: auto auto 96px 50%;
+  translate: -50% 0;
+  width: 360px;
+}
+
+/* 确认 / 汇总框：正文是多段短句，段间用间距分组，不要默认的 1em 大空隙 */
+.dialog-text p {
+  margin: 0 0 6px;
+}
+
+.dialog-text p:last-child {
+  margin-bottom: 0;
+}
+
+.sheet-prompt .sheet-title {
+  padding: 16px 16px 0;
+}
+
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+/* ---------- 设置里的表单元素 ---------- */
+
+.field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.field + .field {
+  margin-top: 12px;
+}
+
+.field-legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ui-fg-soft);
+}
+
+.opts {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: calc(var(--radius-sm) + 2px);
+  background: var(--ui-surface);
+}
+
+.opt {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.opt input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.opt:hover {
+  background: var(--ui-border);
+}
+
+.opt:has(input:checked) {
+  background: var(--ui-accent);
+  color: #fff;
+  box-shadow: var(--ui-shadow-1);
+}
+
+.opt:has(input:checked):hover {
+  background: var(--ui-accent);
+}
+
+.opt:has(input:focus-visible) {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+/* 勾选行：复选框要真的看得见，所以这里把绝对定位还原掉 */
+.opt-row {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 4px 2px;
+  font-size: 13px;
+}
+
+.opt-row:hover {
+  background: transparent;
+}
+
+.opt-row input {
+  position: static;
+  width: 16px;
+  height: 16px;
+  opacity: 1;
+  accent-color: var(--ui-accent);
+}
+
+.opt-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ui-fg-soft);
+}
+
+.sheet-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn {
+  padding: 7px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ui-fg);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.btn:hover:not([disabled]) {
+  background: var(--ui-border);
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: var(--ui-accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not([disabled]) {
+  background: var(--ui-accent);
+  filter: brightness(1.06);
+}
+
+.usage {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-help {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+  font-size: 12.5px;
+  color: var(--ui-fg-soft);
+}
+
+.sheet-help summary {
+  cursor: pointer;
+  color: var(--ui-fg);
+}
+
+.help-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.help-version {
+  margin: 8px 0 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* ---------- 移动模式：面板变底部抽屉 ---------- */
+
+[data-mobile='1'] .sheet {
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: 78vh;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: 0;
+  animation-name: sheet-up;
+}
+
+[data-mobile='1'] .sheet-prompt {
+  inset: auto 0 0 0;
+  translate: none;
+}
+
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 窄屏即使没开移动模式，贴着右下的 320px 面板也放不下 */
+@media (max-width: 560px) {
+  .sheet {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: none;
+    max-height: 78vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .sheet-prompt {
+    translate: none;
+  }
+}
+
+/* ---------- 废纸篓面板（M2） ---------- */
+
+.sheet-trash {
+  max-height: min(72vh, 600px);
+}
+
+/*
+ * 面板要贴着**它自己的**触发点。`.sheet` 的默认锚点是右下角（那里是 `.controls`
+ * 那排常驻控件），而废纸篓入口在左下（`.trash-anchor`：left 16 / bottom 16），
+ * 照抄默认锚点就成了"点左边、弹右边"，面板跟按钮之间没有任何视觉联系。
+ *
+ * 72px = 按钮上沿（16 + 40）再留 16px 呼吸；left 16px 与按钮左沿对齐。
+ *
+ * 这条**必须待在 min-width 里**：媒体查询不提升特异性，同一条 `.sheet-trash`
+ * 若写在 `@media (max-width: 560px)` 之后，会反超那里的"底部抽屉"（width: 100%
+ * / inset: 0），窄屏就变成贴左下角的小浮窗了。移动模式的
+ * `[data-mobile='1'] .sheet`（0,2,0）本来就能压住这条（0,1,0）。
+ */
+@media (min-width: 561px) {
+  .sheet-trash {
+    inset: auto auto 72px 16px;
+    width: 360px;
+  }
+}
+
+.trash-count {
+  font-size: 12px;
+  color: var(--ui-fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.trash-body {
+  padding-top: 2px;
+}
+
+.trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trash-row {
+  display: grid;
+  /* minmax(0,1fr) 而不是 1fr：1fr 的 min-content 是"最长单词"，长 URL 会把恢复按钮挤出去 */
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.trash-row:hover {
+  background: var(--ui-surface);
+}
+
+.trash-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  /* 浅色便签在浅色面板上会糊掉，一圈内描边把它拎出来 */
+  box-shadow: inset 0 0 0 1px rgb(17 24 39 / 12%);
+}
+
+.trash-text {
+  min-width: 0;
+}
+
+.trash-line {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  /* 三行已经按字数截过，这里只防"没有空格的超长串"横向撑破 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-time {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--ui-fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.trash-restore {
+  flex: none;
+}
+
+.trash-blank {
+  margin: 20px 0 10px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ui-fg-soft);
+}
+
+.trash-blank[hidden] {
+  display: none;
+}
+
+.btn-danger {
+  border-color: rgb(185 28 28 / 26%);
+  color: #b91c1c;
+}
+
+.btn-danger:hover:not([disabled]) {
+  background: rgb(185 28 28 / 8%);
+}
+
+/*
+ * 清空：3 秒充能进度画在 ::before 上，**从左往右填满**。
+ * `touch-action: none` 是关键 —— 触摸端按住时浏览器默认会把手势当成"滚动/长按菜单"，
+ * 那 3 秒里指针事件会被抢走，进度条走到一半就断了。
+ *
+ * 这里原本是 `conic-gradient` 画的"环绕进度环"。但按钮是 102×33 的圆角矩形，
+ * 环是靠 `mask: radial-gradient(farthest-side, …)` 挖出来的，而 `farthest-side`
+ * 在这种扁盒子上 = 到最远**边**的距离 = 半宽 53px：挖出来的内圆半径 51px，
+ * 比按钮半高（16.5px）大得多，于是「环」只剩左右两端各一条竖着的月牙，上下两条边
+ * 什么都没有 —— 看着像渲染坏了（实测 p=0.5 时只有右端一撇红）。
+ *
+ * 换成横向充能还有两个好处：填充宽度直接就是"还剩多久"，和 3 秒线性同拍；
+ * conic 的角速度与沿边的线速度不一致（顶边会瞬间铺满、两个端头却要等很久），
+ * 本来就不适合这么扁的盒子。
+ */
+.trash-purge {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.trash-purge::before {
+  content: '';
+  position: absolute;
+  /* 用 width 而不是 scale：横向 scale 会把 7px 的圆角在水平方向压成方角，
+     充能条左端就会戳出按钮的圆角轮廓之外。宽一点点重排一个绝对定位盒子，代价可忽略。 */
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--p, 0) * 100%);
+  border-radius: calc(var(--radius-sm) - 1px) 0 0 calc(var(--radius-sm) - 1px);
+  /*
+   * 14% 而不是更浓：这是**红色的底上还要读深红字**。红字 #b91c1c 配 14% 底色
+   * 仍能守住 4.5:1（再浓一点就掉到 4.3）；按住时也不额外叠一层静态底色，
+   * 那点"按下去了"的反馈由充能条第一帧补上（16ms 后就有），不值得拿对比度换。
+   */
+  background: rgb(185 28 28 / 14%);
+  /* --p 由 rAF 每帧写 0→1；从左边长出来，不跟字抢位置 */
+  pointer-events: none;
+}
+
+/*
+ * 充能底色是定位元素，默认盖在按钮的文字之上（同层里只按树序排）。
+ * 标签也定位一下，就能按树序压回它上面，字始终是干净的。
+ */
+.trash-purge-label {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 按住期间每帧都在改 --p，加过渡只会拖后腿；松手/滑出按钮时让它退回去而不是瞬跳 */
+  .trash-purge:not(.is-holding)::before {
+    transition: width 160ms var(--ease);
+  }
+}
+
+.trash-purge.is-armed {
+  border-color: transparent;
+  background: #b91c1c;
+  color: #fff;
+}
+
+.trash-purge:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- 提示条 ---------- */
+
+.toast-host {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  translate: -50% 0;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 420px);
+  padding: 9px 14px;
+  border-radius: var(--radius-pill);
+  background: rgb(31 41 55 / 92%);
+  color: #f9fafb;
+  font-size: 13px;
+  box-shadow: var(--ui-shadow-2);
+  animation: toast-in var(--dur-base) var(--ease);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toast-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* 移动模式把提示挪到顶部：底部会被软键盘盖住 */
+[data-mobile='1'] .toast-host {
+  top: calc(12px + env(safe-area-inset-top));
+  bottom: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .toast,
+  .fab,
+  .ctl {
+    animation: none;
+    transition: none;
+  }
+}
+
+/*
+ * 大图预览。dialog 铺满整屏、背景透明（图自己承载视觉），
+ * 图片的缩放/平移全在 transform 上，对话框本身不参与布局变化 —— 拖起来才跟手。
+ */
+.lightbox {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgb(10 12 16 / 88%);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.lightbox::backdrop {
+  background: rgb(10 12 16 / 60%);
+}
+
+.lightbox-img {
+  max-width: 92vw;
+  max-height: 84dvh;
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+  transform-origin: center center;
+  /* 拖动时不要浏览器接管手势（否则触摸端会先滚动再撤销我们的 transform） */
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.lightbox-img:active {
+  cursor: grabbing;
+}
+
+.lightbox-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  color: rgb(255 255 255 / 72%);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+/*
+ * 出图舞台：卡片必须在文档里才有布局与字体（离屏 DOM 片段量不出高度），
+ * 所以放到视口外的负坐标而不是 display:none / 未挂载。
+ */
+.export-stage {
+  position: fixed;
+  top: 0;
+  left: -20000px;
+  pointer-events: none;
+  /* 不参与命中与无障碍树，快照时也不会被别的层盖住 */
+  z-index: -1;
+}
+
+.export-wall {
+  position: relative;
+}

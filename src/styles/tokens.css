@@ -1,0 +1,124 @@
+/*
+ * 设计令牌。命名约定：
+ *   --ui-*      界面控件
+ *   --canvas-*  画布材质（4 种背景各自覆盖）
+ *   --grid-*    网格背景
+ * 唯一事实来源：改颜色只改这里，其它 CSS 只引用变量。
+ */
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --fs-note: 16px;
+  --lh-note: 1.55;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --z-controls: 40;
+  --z-panel: 50;
+  --z-toast: 60;
+
+  /* 视口状态（由 canvas/viewport.ts 写，CSS 只读） */
+  --pan-x: 0;
+  --pan-y: 0;
+  --scale: 1;
+
+  /* LOD 阈值：由 prefs.baseFontSize 算出后写进来，不要在 CSS 里硬编码 7px */
+  --s-text-min: 0.4375;
+
+  /* 网格：96 世界单位一格，线宽固定 1px（画布类应用惯例，线不随缩放变粗） */
+  --grid-step: 96;
+
+  /* 材质噪点：一条静态 data URI，构建期不变，不做运行时生成 */
+  --noise-src: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='140'%20height='140'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.85'%20numOctaves='4'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='140'%20height='140'%20filter='url(%23n)'/%3E%3C/svg%3E");
+
+  --ui-accent: #2563eb;
+  --ui-shadow-1: 0 1px 2px rgb(17 24 39 / 10%);
+  --ui-shadow-2: 0 8px 28px rgb(17 24 39 / 14%);
+  color-scheme: light;
+}
+
+/* ---------- paper：暖白纸 ---------- */
+[data-background='paper'] {
+  --canvas: #f5f2ec;
+  /* 两层：中间一块柔光 + 四周极轻暗角。单层平涂在 27 寸屏上会像"纯色色块" */
+  --canvas-glow:
+    radial-gradient(120% 95% at 50% 35%, rgb(255 255 255 / 55%), rgb(255 255 255 / 0) 62%),
+    radial-gradient(135% 115% at 50% 45%, rgb(96 76 43 / 0) 55%, rgb(96 76 43 / 8%) 100%);
+  --noise-opacity: 0.05;
+  --grid-line: rgb(120 105 80 / 16%);
+  --grid-line-strong: rgb(120 105 80 / 32%);
+
+  --ui-fg: #1f2937;
+  --ui-fg-soft: #6b7280;
+  --ui-surface: rgb(255 255 255 / 88%);
+  --ui-surface-solid: #fff;
+  --ui-border: rgb(17 24 39 / 10%);
+  color-scheme: light;
+}
+
+/* ---------- kraft：牛皮纸 ---------- */
+[data-background='kraft'] {
+  --canvas: #e7dcc9;
+  --canvas-glow:
+    radial-gradient(120% 95% at 50% 35%, rgb(255 250 240 / 35%), rgb(255 250 240 / 0) 60%),
+    radial-gradient(140% 120% at 50% 50%, rgb(84 60 26 / 0) 52%, rgb(84 60 26 / 14%) 100%);
+  --noise-opacity: 0.11;
+  --grid-line: rgb(110 90 60 / 22%);
+  --grid-line-strong: rgb(110 90 60 / 40%);
+
+  --ui-fg: #2b2419;
+  --ui-fg-soft: #6f6350;
+  --ui-surface: rgb(255 252 246 / 90%);
+  --ui-surface-solid: #fffdf8;
+  --ui-border: rgb(43 36 25 / 12%);
+  color-scheme: light;
+}
+
+/* ---------- grid：方格纸 ---------- */
+[data-background='grid'] {
+  --canvas: #f7f5f0;
+  /* 方格纸要"平"：有一层渐晕就不像印刷的方格纸，而像一张有褶皱的纸 */
+  --canvas-glow: none;
+  --noise-opacity: 0;
+  --grid-line: rgb(90 110 130 / 20%);
+  /* 每 5 格一条粗线，读数时不用一格格数 */
+  --grid-line-strong: rgb(90 110 130 / 42%);
+
+  --ui-fg: #1f2937;
+  --ui-fg-soft: #6b7280;
+  --ui-surface: rgb(255 255 255 / 88%);
+  --ui-surface-solid: #fff;
+  --ui-border: rgb(17 24 39 / 10%);
+  color-scheme: light;
+}
+
+/* ---------- blackboard：黑板（= 深色模式） ---------- */
+[data-background='blackboard'] {
+  /* 纯黑：OLED 上大量像素真正关闭才省电，用 #1a1d1b 这种"近黑"等于多开一层背光（决策 18） */
+  --canvas: #000;
+  --canvas-glow: radial-gradient(120% 95% at 50% 30%, rgb(255 255 255 / 7%), rgb(255 255 255 / 0) 62%);
+  /* 上限 0.10：再高就不"接近纯黑"了。合成为 soft-light，避免噪点把黑底整体抬成灰 */
+  --noise-opacity: 0.07;
+  --grid-line: rgb(255 255 255 / 12%);
+  --grid-line-strong: rgb(255 255 255 / 22%);
+
+  --ui-fg: #e8eae6;
+  --ui-fg-soft: #9aa39c;
+  --ui-surface: rgb(38 42 39 / 92%);
+  --ui-surface-solid: #232725;
+  --ui-border: rgb(255 255 255 / 12%);
+  --ui-accent: #7aa2f7;
+  --ui-shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --ui-shadow-2: 0 8px 28px rgb(0 0 0 / 55%);
+  color-scheme: dark;
+}

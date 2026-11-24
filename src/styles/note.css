@@ -1,0 +1,536 @@
+/*
+ * 便签卡片。
+ *
+ * 几何全部走 CSS 变量（--x/--y/--w/--min-h），由 NoteCard 写：
+ * 变量比逐个改 style.left/top 便宜一档（一次 setProperty 而不是四个长属性重解析），
+ * 而且让"位置"在 CSS 里始终是一个可推导的表达式。
+ *
+ * height **不固定**：卡片由内容撑开、--min-h 兜底，存下来的 --h 只给远视角色块用（S5）。
+ * 若把 --h 写成 height，`measureHeight` 量到的永远是它自己，高度回填就成了循环定义。
+ */
+
+.note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /*
+   * 位置用独立的 `translate` 属性，而不是 `transform: translate(...)`。
+   *
+   * 一是 translate 与 left/top 相比走合成、不触发重排；
+   * 二是**留出 transform 之外的独立通道**：浮起时的 `scale`/`rotate` 会绕
+   * transform-origin 生效，而 origin 解析在元素变换前的坐标系里。若位置写在
+   * transform 里，绕 (130,80) 旋转的就是"世界原点附近的那个点"，卡片会横跳一段；
+   * 走独立 translate 时，组合顺序是 translate(rotate(scale(p)))，旋转中心才真的
+   * 落在卡片自身中心。
+   */
+  translate: calc(var(--x, 0) * 1px) calc(var(--y, 0) * 1px);
+  width: calc(var(--w, 320) * 1px);
+  min-height: calc(var(--min-h, 320) * 1px);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--note-bg, #f9d5e5);
+  color: var(--note-fg, #1f2937);
+  box-shadow:
+    0 1px 2px rgb(17 24 39 / 10%),
+    0 6px 20px rgb(17 24 39 / 8%);
+  font-size: var(--base-font-size, var(--fs-note));
+  line-height: var(--lh-note);
+  /* 长串英文/URL 不该把卡片撑破：宁可断词也不能横向溢出 */
+  overflow-wrap: anywhere;
+  /* 静息态不选中：否则长按浮起时会把半张卡的文字一起拖蓝（编辑态在 .note-body 里恢复） */
+  user-select: none;
+  cursor: text;
+}
+
+.note-body p {
+  margin: 0;
+}
+
+/* 段落间距用 margin 而不是空段落：markdown 里'\n\n'就是两段，不该存成空行 */
+.note-body p + p {
+  margin-top: 0.55em;
+}
+
+.note-body strong {
+  font-weight: 650;
+}
+
+/*
+ * 富文本（M2）：列表 / 行内代码 / 链接 / 删除线 / 图片。
+ * 静息渲染（.note-body）与编辑态（.note-editor，Tiptap 落地的 DOM）共用一套规则 ——
+ * 两处样式不一致的话，用户一进编辑就会看到"排版跳了一下"。
+ */
+:is(.note-body, .note-editor) :is(ul, ol) {
+  margin: 0.35em 0;
+  padding-left: 1.35em;
+}
+
+:is(.note-body, .note-editor) li > p {
+  margin: 0;
+}
+
+/* 列表项之间不额外留白：便签里的列表通常只有三五项，拉开就像三段了 */
+:is(.note-body, .note-editor) li + li {
+  margin-top: 0.15em;
+}
+
+:is(.note-body, .note-editor) code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 0.1em 0.32em;
+  border-radius: 4px;
+  background: rgb(17 24 39 / 8%);
+}
+
+:is(.note-body, .note-editor) a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  /* 深色底上要能看清链接：下划线比换颜色更安全（换色会撞便签底色） */
+  text-decoration-color: currentcolor;
+}
+
+:is(.note-body, .note-editor) a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/*
+ * 图片：inline 节点但视觉上独占一行（markdown 里 ![]() 本来就是块状观感）。
+ *
+ * 选择器只认 `.note-img`（image.ts 给每张便签内图片挂的类），**不能写裸 `img`**：
+ * Tiptap 会在图片节点两侧各塞一个 `<img class="ProseMirror-separator" alt="">`，
+ * 它们没有 src，套上下面那条"块级 + 48px 占位"就成了两个灰块。实测一张图配一段字的卡：
+ * 编辑态 304px、静息态 188px —— 多出来的 116px 全在图片下方，一退出编辑整块塌陷，
+ * 用户看到的就是"图片下面的文字突然贴到卡片边缘"。
+ */
+:is(.note-body, .note-editor) img.note-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.4em 0;
+  border-radius: 6px;
+}
+
+/* 正在加载/失效的图：宁可留一块浅底，也不要塌成 0 高让用户以为内容丢了 */
+:is(.note-body, .note-editor) img.note-img:not([src]) {
+  min-height: 48px;
+  background: rgb(17 24 39 / 6%);
+}
+
+/*
+ * Tiptap 的两个内部件不参与排版 —— 静息渲染没有它们，编辑态若有尺寸，一进一出都在跳。
+ * `separator` 是图片这种 inline atom 旁边的光标落点占位，本身就不该有尺寸；
+ * `trailingBreak` 是行尾 `<br>`，只有在**图片段落**里多余（图是块级，这一行没有文字要撑）；
+ * 纯空段落还要靠它撑出光标高度，所以不能全局隐藏。
+ */
+.note-editor img.ProseMirror-separator {
+  /* Tiptap 运行时会注入一条 `img.ProseMirror-separator { display: inline !important }`，
+     只有 !important + 更高特异性才压得住。它想保住的"光标落点"在图片是块级时并不存在。 */
+  display: none !important;
+}
+
+.note-editor p:has(> img.note-img) > br.ProseMirror-trailingBreak {
+  display: none;
+}
+
+/* 外链图片不加载（CSP 也不放行 https）：给一个可辨认的占位，而不是裂图 */
+:is(.note-body, .note-editor) .note-img-ext {
+  display: inline-block;
+  padding: 0.1em 0.4em;
+  border: 1px dashed currentcolor;
+  border-radius: 4px;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.note-placeholder {
+  display: none;
+  color: var(--note-fg, #1f2937);
+  opacity: 0.35;
+  /* 占位符不该吃掉指针事件，否则空卡的双击会打在它上面 */
+  pointer-events: none;
+}
+
+.note[data-empty='true'] .note-placeholder {
+  display: block;
+}
+
+/*
+ * 编辑态。z-index 由 commands.bringToFront 改记录、NoteCard 写到内联 style，
+ * 这里不用 CSS 硬提层级 —— 那会让"编辑中的卡在最上面"和"卡片真实 z 序"两套真相打架。
+ */
+.note.is-editing {
+  cursor: auto;
+  user-select: text;
+  box-shadow:
+    0 0 0 2px var(--ui-accent),
+    0 10px 28px rgb(17 24 39 / 16%);
+}
+
+/*
+ * Tiptap 落地的 DOM。它自带 .ProseMirror，但默认样式来自外部 css（没引），
+ * 所以这里必须自己定 outline/margin，否则会出现"点击时有一圈黑框"和"段落双倍间距"。
+ */
+.note-editor {
+  outline: none;
+  min-height: 1.2em;
+}
+
+.note-editor p {
+  margin: 0;
+}
+
+.note-editor p + p {
+  margin-top: 0.55em;
+}
+
+/*
+ * ---------- LOD（tech-design §2.4）----------
+ *
+ * 层级只写在 `.world` 的 dataset 上（canvas/lod.ts），这里全部用后代选择器接住。
+ * 一次 dataset 改动 = 一次子树样式重算；逐卡改 class 就是 500 次。
+ *
+ * 第 3 档本该切到聚合层（M4 的 cluster.ts）。现在没有聚合层，
+ * 所以 3 档沿用色块样式 —— 宁可看到一墙色块，也不能在缩到极小时看见一片空白。
+ */
+
+/* 1 档：文字还看得清，阴影与工具条纯属噪声 */
+[data-lod='1'] .note {
+  box-shadow: none;
+}
+
+/* 2/3 档：只剩一块按记录比例还原的纯色卡。用 --h 而不是让内容撑开，才是"色块" */
+[data-lod='2'] .note,
+[data-lod='3'] .note {
+  height: calc(var(--h, 160) * 1px);
+  min-height: 0;
+  box-shadow: none;
+  /*
+   * 正文都藏起来了，`text` 光标在这里是纯误导：既没有可选的文字，也没有可点的插入点，
+   * 而长按依旧能把卡浮起来拖。所以退回画布那套 `grab`（layers.css 里空白处的光标）。
+   */
+  cursor: grab;
+}
+
+/* 正文节点仍在（保留无障碍与 Ctrl+F 命中），只是不可见 */
+[data-lod='2'] .note > *,
+[data-lod='3'] .note > * {
+  visibility: hidden;
+}
+
+/* 正在编辑的卡永远保持全量：色块态把正文藏起来，用户会以为自己打的字被吞了 */
+[data-lod='2'] .note.is-editing,
+[data-lod='3'] .note.is-editing {
+  height: auto;
+  min-height: calc(var(--min-h, 160) * 1px);
+  /* 这一档恢复的是"完整的卡"，光标也得跟着回到文字插入点，否则正在打字却显示抓手 */
+  cursor: text;
+}
+
+[data-lod='2'] .note.is-editing > *,
+[data-lod='3'] .note.is-editing > * {
+  visibility: visible;
+}
+
+/*
+ * ---------- 拖拽（interaction-spec §2）----------
+ *
+ * 浮起用独立的 `scale` / `rotate` 属性，位置则走 `.note` 上的独立 `translate`。
+ * 三个属性分开写不只是为了好读：`transform-origin` 是按**变换前**的坐标系解析的，
+ * 位置若也在 transform 里，旋转就会绕 (130,80) 这个固定点发生，卡片浮起瞬间
+ * 会横跳 20px 左右（实测值），拖起来像"手指和卡片之间隔了一层橡胶"。
+ *
+ * 这段必须排在 LOD 之后：`[data-lod='2'] .note` 与 `.note.is-lifted` 权重相同（0,2,0），
+ * 靠源码顺序决定谁生效 —— 色块态下被拿起的卡也该有影子。
+ */
+
+.note.is-lifted {
+  scale: 1.03;
+  rotate: calc(var(--lift-dir, 1) * 1deg);
+  box-shadow:
+    0 18px 44px rgb(17 24 39 / 22%),
+    0 4px 12px rgb(17 24 39 / 12%);
+  cursor: grabbing;
+  transition: scale 120ms ease, rotate 120ms ease, box-shadow 120ms ease;
+}
+
+/* 落定：过渡只挂在这两个状态上，静息卡不为自己用不到的属性一直挂着 transition */
+.note.is-settling {
+  transition: scale 140ms ease, rotate 140ms ease, box-shadow 140ms ease;
+}
+
+.note-grip {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  translate: -50% 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--note-fg, #1f2937);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.note-grip::before {
+  content: '';
+  width: 18px;
+  height: 6px;
+  /* 一排点用径向渐变铺出来，比叠 6 个 span 便宜 */
+  background-image: radial-gradient(circle, currentcolor 1px, transparent 1.2px);
+  background-size: 6px 6px;
+}
+
+.note:hover .note-grip {
+  opacity: 0.5;
+}
+
+/* 浮起/编辑时把手柄收起来：那一刻它既没用又挡字 */
+.note.is-lifted .note-grip,
+.note.is-editing .note-grip {
+  opacity: 0;
+}
+
+/* 没有 hover 的设备（触摸屏）常显：否则这条拖动入口根本不存在 */
+@media (hover: none) {
+  .note-grip {
+    opacity: 0.35;
+  }
+}
+
+/*
+ * ---------- 删除（M2）----------
+ *
+ * 和手柄一样 hover 才显形。**不设 pointer-events:none** —— 一旦设了，
+ * 触摸端就没有办法"先露出来再点"，而触摸端本来就是常显（下面那条 media）。
+ */
+.note-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--note-fg, #1f2937);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+/*
+ * 和分享图标同一个盒子、同一档描边。两者并排 24px，尺寸差一点就会被一眼看出来 ——
+ * 之前一个是 16px 字形 `×`、一个是 14px SVG，视觉上"一个胖一个瘦"。
+ */
+.note-delete svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.note:hover .note-delete {
+  opacity: 0.45;
+}
+
+.note-delete:hover {
+  opacity: 1;
+  background: rgb(17 24 39 / 10%);
+}
+
+/* 键盘用户：焦点到达时也必须看得见（它没有 hover 兜底） */
+.note-delete:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--ui-accent, #2563eb);
+  outline-offset: 1px;
+}
+
+/* 浮起/编辑时收起：拖拽与输入都不该在手指边上摆一个"删除" */
+.note.is-lifted .note-delete,
+.note.is-editing .note-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (hover: none) {
+  .note-delete {
+    opacity: 0.32;
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/*
+ * ---------- 卡内格式条（M2）----------
+ *
+ * 挂在卡片里、浮在卡片上方，所以随画布缩放一起缩放。
+ * 只给 `display:flex` 一个开关：编辑态出现、退出即消失，不做淡入淡出（打字时任何动效都是噪声）。
+ */
+.note-format {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border);
+  box-shadow: var(--ui-shadow-2);
+  user-select: none;
+  /* 全是图标按钮，一行放不下时宁可溢出也不要换行（换行会把工具条撑成两排盖住正文） */
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.note.is-editing .note-format {
+  display: flex;
+}
+
+/* 图标按钮：正方形，图标本身决定视觉重量，不再用字号/字重假装 */
+.note-format-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui-fg);
+  cursor: pointer;
+}
+
+.note-format-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.note-format-btn:hover {
+  background: rgb(17 24 39 / 6%);
+}
+
+.note-format-btn[aria-pressed='true'] {
+  background: var(--ui-accent);
+  color: #fff;
+}
+
+.note-format-btn:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+/* 链接表单的"应用"是唯一带文字的按钮：宽度由文字决定，不能套 28px 方块的规则 */
+.note-format-btn.note-format-apply {
+  width: auto;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.note-format-link {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0 2px 0 4px;
+}
+
+.note-format-link[hidden] {
+  display: none;
+}
+
+.note-format-link input {
+  width: 148px;
+  padding: 4px 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg);
+  font: inherit;
+  font-size: 13px;
+  user-select: text;
+}
+
+.note-format-link input:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 0;
+}
+
+/*
+ * 卡内"复制为图片"。与 .note-delete 同形，向左错开 24px 并排 ——
+ * 单独写一份而不是合并选择器，是因为 .note-delete 那组规则还要被"浮起/编辑态收起"复用，
+ * 合并起来每次改动都得同时改两处，反而更容易漏。
+ */
+.note-copy {
+  position: absolute;
+  top: 2px;
+  right: 26px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--note-fg, #1f2937);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.note-copy svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.note:hover .note-copy {
+  opacity: 0.45;
+}
+
+.note-copy:hover {
+  opacity: 1;
+  background: rgb(17 24 39 / 10%);
+}
+
+.note-copy:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--ui-accent, #2563eb);
+  outline-offset: 1px;
+}
+
+/* 浮起/编辑时不摆这个按钮：编辑中要复制的是文字，不是整张卡的图 */
+.note.is-lifted .note-copy,
+.note.is-editing .note-copy {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (hover: none) {
+  .note-copy {
+    opacity: 0.32;
+    width: 26px;
+    height: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-copy {
+    transition: none;
+  }
+}

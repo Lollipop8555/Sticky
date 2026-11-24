@@ -1,0 +1,124 @@
+/*
+ * 双层容器：.viewport 只负责裁剪与材质，.world 只做 transform。
+ * 关键纪律：世界层的尺寸是 0×0，子元素用绝对定位的负坐标即可自由铺开，
+ * 不要给 .world 设 width/height —— 无限画布不该有尺寸。
+ */
+
+.app {
+  position: fixed;
+  inset: 0;
+}
+
+.viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--canvas);
+  background-image: var(--canvas-glow, none);
+  touch-action: none;
+  overscroll-behavior: none;
+  /* 空白处能拖 —— 这条 cursor 是"这里可以拖动"的唯一提示 */
+  cursor: grab;
+  /* 让浏览器知道这一层是独立合成层，滚动/缩放不牵连 body */
+  contain: layout paint size;
+}
+
+.viewport.is-panning {
+  cursor: grabbing;
+}
+
+/* 材质噪点：固定在屏幕上（是「屏幕的纸」，不是「世界里的纸」） */
+.viewport::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--noise-src);
+  background-size: 140px 140px;
+  opacity: var(--noise-opacity, 0);
+  will-change: opacity;
+}
+
+/* 黑底上直接叠白噪点会把整体抬成灰：交给 soft-light，只提亮纹理本身 */
+[data-background='blackboard'] .viewport::before {
+  mix-blend-mode: soft-light;
+}
+
+/*
+ * 网格：世界坐标系。双层线条 —— 每格 1px 细线 + 每 5 格 1.5px 粗线。
+ * 用 background-position/size 跟随 pan/scale，零 JS 每帧成本 —— 只需改根节点的变量。
+ * 只在 grid 主题下显示，其它主题 display:none 以免参与合成。
+ *
+ * 四层顺序不能换：粗线必须画在细线**上面**，否则同一位置会被细线盖掉。
+ */
+.viewport::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  /*
+   * 网格是"纸上的印刷线"，必须在便签**下面**。
+   * `::after` 是 .viewport 的最后一个子盒，默认（z-index:auto）会盖在 .world 之上 ——
+   * 负值把它压回背景层：仍在 .viewport 自身背景之上、.world 与噪点之下。
+   * （.viewport 是 fixed，本身就是层叠上下文，-1 不会漏到 body 背后去。）
+   */
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, var(--grid-line-strong) 0 1.5px, transparent 1.5px),
+    linear-gradient(to bottom, var(--grid-line-strong) 0 1.5px, transparent 1.5px),
+    linear-gradient(to right, var(--grid-line) 0 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 0 1px, transparent 1px);
+  background-size:
+    calc(var(--grid-step) * 5 * var(--scale) * 1px) calc(var(--grid-step) * 5 * var(--scale) * 1px),
+    calc(var(--grid-step) * 5 * var(--scale) * 1px) calc(var(--grid-step) * 5 * var(--scale) * 1px),
+    calc(var(--grid-step) * var(--scale) * 1px) calc(var(--grid-step) * var(--scale) * 1px),
+    calc(var(--grid-step) * var(--scale) * 1px) calc(var(--grid-step) * var(--scale) * 1px);
+  background-position: calc(var(--pan-x) * 1px) calc(var(--pan-y) * 1px);
+  background-repeat: repeat;
+}
+
+[data-background='grid'] .viewport::after {
+  display: block;
+}
+
+/*
+ * 远景关网格：缩到 0.5 以下时一格不到 48px，一屏上千条线只会糊成一层灰面。
+ * `data-grid` 由 canvas/render.ts 按 scale 写（CSS 没有条件判断，这是最省的开关）。
+ */
+[data-grid='off'] .viewport::after {
+  display: none;
+}
+
+/*
+ * transform 由 canvas/render.ts 每帧写成内联 style（translate3d + scale）。
+ * 这里不写 transform：CSS 变量版会让改一次变量就重算整棵子树样式，500 张卡时是数量级差距。
+ * 写 translate3d 而不是 translate：强制走合成层，scale 变化时不重绘文字。
+ */
+.world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.note-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * 往画布拖图的落点提示：只画一圈内阴影，不新建元素。
+ * 用 inset box-shadow 而不是 outline：outline 会被 .viewport 的 overflow:hidden 裁掉半圈。
+ */
+.app.is-dropping .viewport {
+  box-shadow:
+    inset 0 0 0 2px var(--accent, #3b82f6),
+    inset 0 0 48px rgb(59 130 246 / 12%);
+}
