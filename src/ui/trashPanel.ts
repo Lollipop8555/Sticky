@@ -49,6 +49,8 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
 
   const dialog = el(doc, 'dialog', 'sheet sheet-trash');
   dialog.setAttribute('aria-labelledby', 'trash-title');
+  // 同设置面板：初始焦点给 dialog，避免 showModal() 落在关闭按钮上显出蓝环
+  dialog.tabIndex = -1;
 
   const head = el(doc, 'header', 'sheet-head');
   // 静态文案走指纹：面板关着的时候切语言，再打开也是新语言
@@ -335,7 +337,10 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
 
   return {
     open() {
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) {
+        dialog.showModal();
+        dialog.focus();
+      }
       void refresh();
     },
     close() {

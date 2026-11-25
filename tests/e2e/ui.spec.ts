@@ -37,6 +37,32 @@ async function settle(page: Page): Promise<void> {
   await page.waitForTimeout(600);
 }
 
+test('打开面板：初始焦点给 dialog，不在关闭按钮上留蓝环；Tab 才走到按钮', async ({ page }) => {
+  await boot(page);
+
+  await openSettings(page);
+  const settings = page.locator('.sheet-settings');
+  await expect(settings).toBeFocused();
+  await expect(settings.locator('.sheet-close')).not.toBeFocused();
+  expect(
+    await settings.locator('.sheet-close').evaluate((el) => el.matches(':focus-visible')),
+  ).toBe(false);
+  await page.keyboard.press('Escape');
+
+  await page.locator('.trash-anchor').click();
+  const trash = page.locator('.sheet-trash');
+  await expect(trash).toBeVisible();
+  await expect(trash).toBeFocused();
+  await expect(trash.locator('.sheet-close')).not.toBeFocused();
+
+  // 键盘用户仍要看得见焦点：Tab 到关闭按钮时蓝环照常出现
+  await page.keyboard.press('Tab');
+  await expect(trash.locator('.sheet-close')).toBeFocused();
+  expect(
+    await trash.locator('.sheet-close').evaluate((el) => el.matches(':focus-visible')),
+  ).toBe(true);
+});
+
 test('设置里切新建方式：FAB 立刻出现；FAB 在视口中心建卡并直接进编辑', async ({ page }) => {
   await boot(page);
 

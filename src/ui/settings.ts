@@ -134,6 +134,9 @@ type UsageState =
 export function mountSettings(options: SettingsOptions, doc: Document = document): SettingsPanel {
   const dialog = el(doc, 'dialog', 'sheet sheet-settings');
   dialog.setAttribute('aria-labelledby', 'settings-title');
+  // 让初始焦点落在 dialog 而不是关闭按钮：showModal() 程序化聚焦会被浏览器
+  // 判成 :focus-visible，按钮上凭空多一圈蓝环（鼠标用户没碰过键盘）
+  dialog.tabIndex = -1;
 
   const head = el(doc, 'header', 'sheet-head');
   const title = txt(doc, 'h2', 'sheet-title', 'settings.title');
@@ -402,7 +405,11 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
       usageState = { kind: 'pending' };
       paintUsage();
       void refreshUsage();
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) {
+        dialog.showModal();
+        // 覆盖 showModal() 的自动聚焦：先落 dialog 本身，Tab 才走到关闭按钮
+        dialog.focus();
+      }
     },
     close() {
       if (dialog.open) dialog.close();

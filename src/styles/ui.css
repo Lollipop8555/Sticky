@@ -241,6 +241,15 @@
   flex-direction: column;
 }
 
+/*
+ * 打开时焦点托管给 dialog 本身（见 settings.ts / trashPanel.ts 的 open）：
+ * 这圈 outline 对整块面板没有意义，还会把刚打开的面板描成"被选中"。
+ * 键盘用户 Tab 到关闭按钮时，那里仍有全局 :focus-visible 的蓝环。
+ */
+.sheet:focus-visible {
+  outline: none;
+}
+
 .sheet::backdrop {
   background: rgb(17 24 39 / 16%);
 }
