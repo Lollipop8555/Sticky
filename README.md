@@ -57,4 +57,4 @@ DevTools 的 `Application → Storage → Clear site data` 也能用，但同样
 
 ## 许可
 
-[MIT](./LICENSE) © 2026 Sticky Wall contributors。当前版本 **1.0.0**，显示在设置面板底部的「帮助」里。
+[MIT](./LICENSE) © 2026 Sticky Wall contributors。当前版本 **1.1.0**，显示在设置面板底部的「帮助」里。
