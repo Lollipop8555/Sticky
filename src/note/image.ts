@@ -73,6 +73,8 @@ export const NoteImage = BaseImage.extend({
         class: 'note-img',
         loading: 'lazy',
         decoding: 'async',
+        // 静息态的图不可原生拖拽：拖出去松手会被画布的 drop 当成本地图片，多建一张卡
+        draggable: 'false',
       },
     ];
   },

@@ -11,14 +11,16 @@
  * 且写属性前先比对上次的值 —— 静止时没有任何写入。
  */
 
+import type { Background } from '@/app/theme';
 import type { AppShell } from '@/app/shell';
 import { store } from '@/app/store';
 import { activeBackground } from '@/app/theme';
 import { onFrame, scheduleFrame } from '@/canvas/rAF';
 import { get as getViewport, onChange as onViewportChange } from '@/canvas/viewport';
 import { displayColor, threadColor } from '@/note/palette';
+import type { NoteRecord } from '@/storage/types';
 
-import { anchorOf, type Point } from './geometry';
+import { ANCHOR_INSET, anchorOf, type Point } from './geometry';
 import { linkIndex, onLinksChange } from './state';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -38,14 +40,30 @@ interface Geom {
 interface EdgeView {
   path: SVGPathElement;
   grad: SVGLinearGradientElement;
+  gradId: string;
   stops: readonly [SVGStopElement, SVGStopElement];
   /** 上次写进去的值；相同就整段跳过，静止时零写入 */
   geom: Geom | null;
+  /** 走纯色还是渐变：两端同色时没必要挂一条渐变着色器 */
+  solid: boolean;
+  /** 当前是否被 `display: none` 藏起来了 —— 不记这个就会每帧对每条边 removeProperty 一次 */
+  hidden: boolean;
 }
 
 interface DotView {
   circle: SVGCircleElement;
   at: (Point & { fill: string }) | null;
+}
+
+/**
+ * 一张卡的线色缓存：同一帧里一张卡可能被多条边问到（度数高的卡会被问几十次），
+ * 而 `threadColor(displayColor(...))` 每次都要拼缓存键 —— 逐边算就是在给 GC 送垃圾。
+ * 键是便签 id，失效条件是"卡片底色或画布材质变了"。
+ */
+interface Tone {
+  bgColor: string;
+  bg: Background;
+  color: string;
 }
 
 function make<K extends keyof SVGElementTagNameMap>(
@@ -92,9 +110,61 @@ export function attachLinkPaint(shell: AppShell, doc: Document = document): () =
     // 线画在圆点下面：端点圆要盖住线的端头，否则会看到一个"半圆"
     group.append(path);
 
-    const view: EdgeView = { path, grad, stops: [s1, s2], geom: null };
+    const view: EdgeView = {
+      path,
+      grad,
+      gradId,
+      stops: [s1, s2],
+      geom: null,
+      solid: false,
+      hidden: false,
+    };
     edges.set(key, view);
     return view;
+  }
+
+  const tones = new Map<string, Tone>();
+  /** 锚点只由 x/y 决定（见 geometry 注释），没动过的卡每帧重算纯属浪费 */
+  const anchors = new Map<string, Point>();
+  /** 每帧复用的容器：拖动/平移时逐帧 new，就是在让 GC 一帧一帧地追着扫 */
+  const live = new Set<string>();
+  const liveDots = new Set<string>();
+
+  function toneOf(note: NoteRecord, bg: Background): string {
+    const hit = tones.get(note.id);
+    if (hit && hit.bg === bg && hit.bgColor === note.bgColor) return hit.color;
+    const color = threadColor(displayColor(note.bgColor, bg), bg);
+    tones.set(note.id, { bgColor: note.bgColor, bg, color });
+    return color;
+  }
+
+  function anchorCachedOf(note: NoteRecord): Point {
+    const hit = anchors.get(note.id);
+    if (hit && hit.x === note.x + ANCHOR_INSET && hit.y === note.y + ANCHOR_INSET) return hit;
+    const at = anchorOf(note);
+    anchors.set(note.id, at);
+    return at;
+  }
+
+  /** 一张卡一个圆点：两端同色的重复节点视觉完全一样，没必要画两遍 */
+  function touchDot(id: string, at: Point, fill: string): void {
+    liveDots.add(id);
+    let dot = dots.get(id);
+    if (!dot) {
+      const circle = make(doc, 'circle');
+      circle.setAttribute('class', 'link-dot');
+      circle.setAttribute('r', String(DOT_R));
+      // 后插：圆点永远压在线上面（DOM 顺序即绘制顺序）
+      group.append(circle);
+      dot = { circle, at: null };
+      dots.set(id, dot);
+    }
+    const last = dot.at;
+    if (last && last.x === at.x && last.y === at.y && last.fill === fill) return;
+    dot.circle.setAttribute('cx', String(at.x));
+    dot.circle.setAttribute('cy', String(at.y));
+    dot.circle.setAttribute('fill', fill);
+    dot.at = { x: at.x, y: at.y, fill };
   }
 
   function draw(): void {
@@ -103,9 +173,8 @@ export function attachLinkPaint(shell: AppShell, doc: Document = document): () =
     if (group.getAttribute('transform') !== transform) group.setAttribute('transform', transform);
 
     const bg = activeBackground(doc);
-    const live = new Set<string>();
-    /** 一张卡一个圆点：两端同色的重复节点视觉完全一样，没必要画两遍 */
-    const wantDots = new Map<string, Point & { fill: string }>();
+    live.clear();
+    liveDots.clear();
 
     for (const [a, b] of linkIndex().pairs()) {
       const noteA = store.getNote(a);
@@ -115,19 +184,35 @@ export function attachLinkPaint(shell: AppShell, doc: Document = document): () =
       // 软删后记录直接从 store 摘掉（detach），这里读不到就跳过；
       // 节点先留着不拆 —— 恢复便签时下一帧就能亮回来，重建反而要重新分配渐变 id
       if (!noteA || !noteB) {
-        edges.get(key)?.path.style.setProperty('display', 'none');
+        if (!noteA) tones.delete(a);
+        if (!noteB) tones.delete(b);
+        const gone = edges.get(key);
+        // 只藏一次：每帧对每条边 removeProperty 一遍，等于每帧把所有边重新标脏一次
+        if (gone && !gone.hidden) {
+          gone.path.style.setProperty('display', 'none');
+          gone.hidden = true;
+        }
         continue;
       }
 
       live.add(key);
       const edge = edges.get(key) ?? createEdge(key);
-      edge.path.style.removeProperty('display');
+      if (edge.hidden) {
+        edge.path.style.removeProperty('display');
+        edge.hidden = false;
+      }
 
-      const from = anchorOf(noteA);
-      const to = anchorOf(noteB);
+      const from = anchorCachedOf(noteA);
+      const to = anchorCachedOf(noteB);
       // 两端各取自己卡片的"毛线色"：色相跟着卡片走，线才有渐变；用 textColor 会是同一支墨
-      const c1 = threadColor(displayColor(noteA.bgColor, bg), bg);
-      const c2 = threadColor(displayColor(noteB.bgColor, bg), bg);
+      const c1 = toneOf(noteA, bg);
+      const c2 = toneOf(noteB, bg);
+      // 两端同色挂渐变 = 白搭一条着色器；大片同色便签的墙上这种边占多数
+      const solid = c1 === c2;
+      if (solid !== edge.solid) {
+        edge.path.setAttribute('stroke', solid ? c1 : `url(#${edge.gradId})`);
+        edge.solid = solid;
+      }
 
       const last = edge.geom;
       if (
@@ -150,8 +235,8 @@ export function attachLinkPaint(shell: AppShell, doc: Document = document): () =
         edge.geom = { x1: from.x, y1: from.y, x2: to.x, y2: to.y, c1, c2 };
       }
 
-      wantDots.set(a, { ...from, fill: c1 });
-      wantDots.set(b, { ...to, fill: c2 });
+      touchDot(a, from, c1);
+      touchDot(b, to, c2);
     }
 
     // 边被断开 / 两端都没了：拆掉节点与渐变，别留死 defs
@@ -162,30 +247,11 @@ export function attachLinkPaint(shell: AppShell, doc: Document = document): () =
       edges.delete(key);
     }
 
-    for (const [id, want] of wantDots) {
-      let dot = dots.get(id);
-      if (!dot) {
-        const circle = make(doc, 'circle');
-        circle.setAttribute('class', 'link-dot');
-        circle.setAttribute('r', String(DOT_R));
-        // 后插：圆点永远压在线上面（DOM 顺序即绘制顺序）
-        group.append(circle);
-        dot = { circle, at: null };
-        dots.set(id, dot);
-      }
-      const at = dot.at;
-      if (!at || at.x !== want.x || at.y !== want.y || at.fill !== want.fill) {
-        dot.circle.setAttribute('cx', String(want.x));
-        dot.circle.setAttribute('cy', String(want.y));
-        dot.circle.setAttribute('fill', want.fill);
-        dot.at = { x: want.x, y: want.y, fill: want.fill };
-      }
-    }
-
     for (const [id, dot] of dots) {
-      if (wantDots.has(id)) continue;
+      if (liveDots.has(id)) continue;
       dot.circle.remove();
       dots.delete(id);
+      anchors.delete(id);
     }
   }
 

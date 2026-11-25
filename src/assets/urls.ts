@@ -85,7 +85,17 @@ function hydrateOne(img: HTMLImageElement): void {
 
 /** 渲染完一段 DOM 之后调用：把其中的资产图片换成 blob URL */
 export function hydrateImages(root: ParentNode): void {
-  for (const img of root.querySelectorAll<HTMLImageElement>('img[data-asset]')) hydrateOne(img);
+  for (const img of root.querySelectorAll<HTMLImageElement>('img[data-asset]')) {
+    /*
+     * 静息态的图不能被浏览器当成"可拖的文件"。
+     *
+     * `<img>` 默认是 draggable 的，按住往画布上一拖、松手，浏览器给的是一份真文件，
+     * 而画布的 drop 正是"收到图片就建一张卡"—— 用户看到的是一张卡凭空变成两张。
+     * 编辑态不动：那里靠原生拖拽搬动图片节点。
+     */
+    img.draggable = false;
+    hydrateOne(img);
+  }
 }
 
 /** 编辑态 NodeView 用：直接给一个 img 定源 */

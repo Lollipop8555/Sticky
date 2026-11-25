@@ -119,6 +119,16 @@
 }
 
 /*
+ * 静息态的图：光标是"点开看大图"，不是继承卡片的 `text`（那支 I 形光标在图片上没有意义）。
+ * `-webkit-user-drag: none` 是 Safari/Firefox 那条路：它们不都听 `draggable="false"`，
+ * 而图一旦能被拖出去，松手落在画布上就会多出一张一模一样的卡。
+ */
+.note-body img.note-img {
+  cursor: zoom-in;
+  -webkit-user-drag: none;
+}
+
+/*
  * Tiptap 的两个内部件不参与排版 —— 静息渲染没有它们，编辑态若有尺寸，一进一出都在跳。
  * `separator` 是图片这种 inline atom 旁边的光标落点占位，本身就不该有尺寸；
  * `trailingBreak` 是行尾 `<br>`，只有在**图片段落**里多余（图是块级，这一行没有文字要撑）；

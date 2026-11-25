@@ -13,7 +13,13 @@
   z-index: 1;
   width: 100%;
   height: 100%;
-  overflow: visible;
+  /*
+   * 必须裁剪。层和画布一样大、线画在世界坐标里，两条相连的便签分处屏幕内外时，
+   * 一条线就能把绘制范围撑到几个屏幕之外 —— 那种尺寸的层每帧重绘就是卡顿的来源。
+   * 而屏幕外那些像素本来就看不见，裁掉零损失。
+   */
+  overflow: hidden;
+  contain: layout paint;
   pointer-events: none;
 }
 

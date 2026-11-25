@@ -39,9 +39,59 @@ function makeStage(): HTMLElement {
   return stage;
 }
 
+/** 把一张已解码的图摊到 canvas 上转成 data URL；转不出来就 null（调用方原样留着） */
+function toDataUrl(img: HTMLImageElement): string | null {
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+  if (!width || !height) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // 大图（多半是照片）转 PNG 是几十 MB 的 data URL：铺白底转 JPEG，体积和内存都稳得多
+  const lossless = width * height <= 1_200_000;
+  if (!lossless) {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, width, height);
+  }
+  ctx.drawImage(img, 0, 0, width, height);
+  try {
+    return lossless ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
+  } catch {
+    // 同源 blob 不会污染画布，走到这里只可能是画布被浏览器关掉了
+    return null;
+  }
+}
+
+/**
+ * 把卡上的 blob URL 图换成 data URL。
+ *
+ * `modern-screenshot` 会把 `<img src>` 里**非 data:** 的地址用 `fetch()` 读回来内联，
+ * 而卡上的图是 `blob:` —— 页面 CSP 的 `connect-src 'self'` 不含 `blob:`，那次 fetch 直接被拒，
+ * 库里只能把这张 `<img>` 丢掉：出图看着"少了一块"，控制台里只有一条 Failed to fetch。
+ * canvas 不受 connect-src 约束（图是同源 blob，不污染画布），所以这里自己转一遍，
+ * 快照库拿到的就只剩 data:，一次网络读取都不需要。
+ */
+async function inlineImages(root: HTMLElement): Promise<void> {
+  const images = [...root.querySelectorAll<HTMLImageElement>('img.note-img')];
+  await Promise.all(
+    images.map(async (img) => {
+      if (!(img.currentSrc || img.src).startsWith('blob:')) return;
+      const data = toDataUrl(img);
+      if (!data) return;
+      img.src = data;
+      await img.decode?.().catch(() => undefined);
+    }),
+  );
+}
+
 /**
  * 等图片就位。`renderNoteBody` 里的 hydrate 是异步的（要读 IndexedDB），
  * 出图必须等它把 `data-asset` 换成 blob URL 且解码完 —— 否则导出的是空图框。
+ * 最后再把 blob URL 内联成 data URL（见 `inlineImages`），快照阶段才不用联网读图。
  */
 async function settleImages(root: HTMLElement): Promise<void> {
   const deadline = performance.now() + 3000;
@@ -59,6 +109,7 @@ async function settleImages(root: HTMLElement): Promise<void> {
       img.decode?.().catch(() => undefined),
     ),
   );
+  await inlineImages(root);
 }
 
 async function snapshot(node: HTMLElement, width: number, height: number, scale: number, background: string | null): Promise<Blob> {

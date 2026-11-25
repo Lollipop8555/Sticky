@@ -158,6 +158,30 @@ test('单击图片开 Lightbox，Esc 关闭', async ({ page }) => {
   await expect(page.locator('.note')).toHaveCount(1);
 });
 
+test('静息态的图拖不动：光标是"点开看大图"，也不能被浏览器当文件拖出去', async ({ page }) => {
+  await boot(page);
+  await dropTallImage(page);
+  const img = page.locator('.note-body img.note-img');
+  await expect(img).toHaveAttribute('src', /^blob:/, { timeout: 15_000 });
+
+  /*
+   * `<img>` 默认 draggable，按住拖出去松手时浏览器给的是一份真文件，
+   * 画布的 drop 又正是"收到图片就建一张卡" —— 用户看到的是一张卡变成两张。
+   * 光标也不能继承卡片的 `text`（那支 I 形光标在图片上没有意义）。
+   */
+  await expect(img).toHaveAttribute('draggable', 'false');
+  await expect(img).toHaveCSS('cursor', 'zoom-in');
+
+  // 在图上按住拖一段再松手：只是拖画布，不会多出第二张卡
+  const box = await img.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + 80, box!.y + box!.height / 2 + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator('.note')).toHaveCount(1);
+});
+
 /** 在编辑中的便签里粘贴一张 240×120 的纯色图 */
 async function pasteImage(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -251,11 +275,32 @@ test('复制为图片：进剪贴板（或退化成下载），卡不变', async
   await expect(toast).toContainText(/已复制|已下载/, { timeout: 15_000 });
   const text = await toast.innerText();
   if (text.includes('已复制')) {
-    const hasPng = await page.evaluate(async () => {
+    // 不只看"剪贴板里有个 PNG"：图有没有真的画进去，只能数像素
+    const report = await page.evaluate(async () => {
       const items = await navigator.clipboard.read();
-      return items.some((item) => item.types.includes('image/png'));
+      const item = items.find((one) => one.types.includes('image/png'));
+      if (!item) return { hasPng: false, blue: 0 };
+      const blob = await item.getType('image/png');
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no 2d context');
+      ctx.drawImage(bitmap, 0, 0);
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let blue = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if ((data[i + 3] ?? 0) > 200 && (data[i + 2] ?? 0) > 200 && (data[i] ?? 0) < 140) {
+          blue += 1;
+        }
+      }
+      return { hasPng: true, blue };
     });
-    expect(hasPng).toBe(true);
+    expect(report.hasPng).toBe(true);
+    // 拖进去的是一张 #38bdf8 的满版图：出图里必须有成片的蓝。
+    // 曾经这里是 0 —— 快照库 fetch(blob:) 被 CSP 的 connect-src 拦掉，整张图被丢弃
+    expect(report.blue).toBeGreaterThan(10_000);
   }
 
   await expect(page.locator('.note')).toHaveCount(1);
