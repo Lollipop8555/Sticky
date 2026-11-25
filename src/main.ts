@@ -22,7 +22,7 @@ import { maybeCreateWelcomeNote } from '@/app/welcome';
 import { attachGestures } from '@/canvas/gestures';
 import { attachInteractions } from '@/canvas/interactions';
 import { attachImageDrop } from '@/note/imageNote';
-import { attachNoteLayer, repaintMountedNotes } from '@/canvas/noteLayer';
+import { attachNoteLayer, repaintMountedNotes, repaintMountedSigns } from '@/canvas/noteLayer';
 import { attachRender, paint } from '@/canvas/render';
 import { scheduleFrame } from '@/canvas/rAF';
 import { fitAll, onChange, restoreViewport, toWorld, viewportSize } from '@/canvas/viewport';
@@ -171,7 +171,8 @@ async function boot(): Promise<void> {
   initLinks();
   attachLinkPaint(shell);
   attachGestures(shell.viewport); // wheelMode 由手势层实时读 prefs，不传快照
-  attachNoteLayer(shell); // 卡片落地 + 视口剔除；必须排在 attachRender 之后（剔除要读新视野）
+  // 卡片落地 + 视口剔除；必须排在 attachRender 之后（剔除要读新视野）
+  const noteLayer = attachNoteLayer(shell);
   attachLinking(shell); // 连线模式的输入隔离：capture 阶段，先于 interactions 的委托
   // 右键与大头针共用这一个 popover；"添加连线"交给 mode，菜单不知道模式怎么实现
   const linkMenu = mountLinkMenu(shell, { onAdd: startLinking });
@@ -196,6 +197,19 @@ async function boot(): Promise<void> {
       if (getEditingId() !== null) stopEditing();
       applyMobileFlag(shell.root);
     }
+    /*
+     * 尾签也是派生值（来自偏好，不是记录），同样得整体刷一遍。
+     * 顺带重测高度：开关一开，每张卡都长出一行，记录里的 `height` 不跟上，
+     * 整墙导出按记录算包围盒时会把最下面那排的尾签裁掉。
+     *
+     * 改文字也走这条：字数变了可能折行，量一次比"猜会不会折"便宜。
+     * 重测本身由 rAF 合并（见 noteLayer.scheduleCorrection），连续打字不会每键算一遍。
+     */
+    if ('signOn' in patch || 'signText' in patch) {
+      repaintMountedSigns();
+      noteLayer.remeasure();
+    }
+
     // 背景变了，已挂载卡的显示色是派生的，必须整体重算（记录本身不动）
     if (visualChanged) {
       repaintMountedNotes();

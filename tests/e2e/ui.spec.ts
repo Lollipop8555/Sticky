@@ -156,7 +156,7 @@ test('勾选行的说明在强调色底上仍然读得清（浅色与黑板）',
     await expect(page.locator('html')).toHaveAttribute('data-background', background);
 
     // 两行都是"复选框 + 说明"的结构，都会整行铺强调色，都得过
-    for (const field of ['mobileMode', 'watermarkOn']) {
+    for (const field of ['mobileMode', 'watermarkOn', 'signOn']) {
       const row = page.locator(`.opt-row:has(input[data-field="${field}"])`);
       await row.click();
       await expect(row.locator('input')).toBeChecked();

@@ -211,10 +211,10 @@ test('文本框留空时回落到默认文案，占位符跟着语言走', async
   await openSettings(page);
 
   const input = page.locator('.sheet-settings input[data-field="watermarkText"]');
-  await expect(input).toHaveAttribute('placeholder', '留空则显示「Sticky Wall」');
+  await expect(input).toHaveAttribute('placeholder', '留空时使用「Sticky Wall」');
 
   await page.locator('.sheet-settings .field[data-field="lang"] .opt', { hasText: 'English' }).click();
-  await expect(input).toHaveAttribute('placeholder', 'Defaults to “Sticky Wall”');
+  await expect(input).toHaveAttribute('placeholder', 'Leave empty to use “Sticky Wall”');
   // 用户输入是数据，不进 i18n 指纹：切语言不该清空它
   await input.fill('my notes');
   await expect(input).toHaveValue('my notes');

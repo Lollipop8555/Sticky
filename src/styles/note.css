@@ -173,6 +173,59 @@
 }
 
 /*
+ * 尾签（决策 90）：便签末尾的一行签名，`------ 阿洛 ------` 那种"两条线夹一句话"。
+ *
+ * 线是这里画出来的，不是字符：左右两条 `flex: 1 1 0` 平分剩余宽度，
+ * 所以**永远等长** → 文字被夹在正中，不依赖字数对齐；
+ * 文字变长时先压线、压到 `min-width` 的"基本长度"后文字自己换行，线不再变短。
+ *
+ * 位置同样是设计的一部分：节点在 `.note-body` 之外，
+ * 编辑态 Tiptap 接管的是正文，尾签既不可编辑也不会被绕过去删掉；
+ * `renderNoteBody` 重画正文时也碰不到它。
+ *
+ * 墨色直接用 `--note-fg`：那是 `applyNoteColors` 按卡片底色挑好的文本色，
+ * 便签换颜色（含换背景后的派生色）尾签自己就跟着变，不需要另算一套。
+ */
+.note-sign {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin-top: 0.8em;
+  font-size: 0.78em;
+  line-height: 1.4;
+  color: var(--note-fg, #1f2937);
+  /* 压淡到"签名"的量级，但 0.6 在浅色卡和黑板上都还认得出是字 */
+  opacity: 0.6;
+  /* 拖动、框选都该只认正文：别让用户误以为这行可以选中带走 */
+  pointer-events: none;
+  user-select: none;
+}
+
+/*
+ * 一条线 = 零高度元素上的上边框。用 `currentColor` 而不是再取一次墨色，
+ * 透明度 / 变主题 / 换便签色都自动跟着走。
+ * `flex-basis: 0` 是关键：两条线从 0 开始平分，不是从各自内容宽度开始 —— 这样才等长。
+ */
+.note-sign-rule {
+  flex: 1 1 0;
+  min-width: 2.5em;
+  border-top: 1px solid currentColor;
+}
+
+/* 文字块：不抢空间、可换行、多行时仍居中；`min-width: 0` 允许它先被压窄再折行 */
+.note-sign-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* 关掉时整行不占位。`hidden` 由 JS 写，导出快照也认这个属性 */
+.note-sign[hidden] {
+  display: none;
+}
+
+/*
  * 编辑态。z-index 由 commands.bringToFront 改记录、NoteCard 写到内联 style，
  * 这里不用 CSS 硬提层级 —— 那会让"编辑中的卡在最上面"和"卡片真实 z 序"两套真相打架。
  */

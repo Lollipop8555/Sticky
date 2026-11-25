@@ -15,6 +15,7 @@ import type { AppShell } from '@/app/shell';
 import { store } from '@/app/store';
 import { applyNoteColors, createNoteEl, destroyNoteEl, patchNoteEl } from '@/note/NoteCard';
 import { measureHeight } from '@/note/measure';
+import { applyNoteSign } from '@/note/sign';
 import type { NoteRecord } from '@/storage/types';
 
 import { intersects, needsCulling, visibleRect } from './culling';
@@ -49,10 +50,27 @@ export function repaintMountedNotes(): void {
   }
 }
 
+/**
+ * 尾签同理：它由**全局偏好**派生，记录不变，`patchNoteEl` 的逐字段比对不会碰它。
+ * 改开关 / 改文字后必须显式刷一遍已挂载的卡，否则要等滚出视野再滚回来才生效。
+ */
+export function repaintMountedSigns(): void {
+  for (const el of elements.values()) applyNoteSign(el);
+}
+
 const MAX_CORRECTION = 2;
 
 export interface NoteLayer {
   detach(): void;
+  /**
+   * 把所有已挂载的卡重新排一次高度测量。
+   *
+   * 为什么需要：记录里的 `height` 只在首挂载时用 `offsetHeight` 校正一次，
+   * 之后靠 `corrected` 记着"这卡量过了"。而尾签是**开关一开就整体改变卡高**的，
+   * 不重测的话记录停在旧高度上 —— 屏幕上看没差（卡是 `min-height` 撑的），
+   * 但整墙导出按记录高度算包围盒，最下面那排的尾签会被裁掉半行。
+   */
+  remeasure(): void;
 }
 
 export function attachNoteLayer(shell: AppShell): NoteLayer {
@@ -240,6 +258,13 @@ export function attachNoteLayer(shell: AppShell): NoteLayer {
   const offState = store.subscribeState(() => scheduleFrame());
 
   return {
+    remeasure() {
+      for (const id of elements.keys()) {
+        corrected.delete(id);
+        pendingCorrection.add(id);
+      }
+      scheduleCorrection();
+    },
     detach() {
       offNotes();
       offFrame();

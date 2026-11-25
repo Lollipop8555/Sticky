@@ -222,6 +222,32 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   wmField.append(wmInput);
   share.append(wmRow, wmField);
 
+  // ---- 尾签（决策 90）----
+  // 单独一组而不是并进"分享图片"：它改的是**卡片本身**（屏幕上就看得到），
+  // 水印只在出图时出现，两者同屏容易混成"图片相关的开关"
+  const signSec = section(doc, 'settings.sign');
+  const signRow = el(doc, 'label', 'opt opt-row');
+  const signToggle = el(doc, 'input');
+  signToggle.type = 'checkbox';
+  signToggle.dataset['field'] = 'signOn';
+  const signText = el(doc, 'span', 'opt-text');
+  signText.append(
+    txt(doc, 'span', '', 'settings.signToggle'),
+    txt(doc, 'small', 'opt-hint', 'settings.signHint'),
+  );
+  signRow.append(signToggle, signText);
+
+  const signField = el(doc, 'label', 'field field-text');
+  signField.append(txt(doc, 'span', 'field-legend', 'settings.signText'));
+  const signInput = el(doc, 'input', 'text-input');
+  signInput.type = 'text';
+  signInput.dataset['field'] = 'signText';
+  signInput.maxLength = 40;
+  signInput.autocomplete = 'off';
+  signInput.spellcheck = false;
+  signField.append(signInput);
+  signSec.append(signRow, signField);
+
   // ---- 数据 ----
   const data = section(doc, 'settings.data');
   const usage = el(doc, 'p', 'usage');
@@ -266,7 +292,7 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   const version = el(doc, 'p', 'help-version');
   details.append(help, version);
 
-  body.append(language, look, feel, share, data, details);
+  body.append(language, look, feel, share, signSec, data, details);
   dialog.append(head, body);
   doc.body.append(dialog);
 
@@ -289,13 +315,14 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   }
 
   /** placeholder 不是静态指纹（applyLocale 只管 textContent/title/aria），切语言得自己重写 */
-  function paintWatermark(): void {
+  function paintPlaceholders(): void {
     wmInput.placeholder = t('settings.watermarkPlaceholder');
+    signInput.placeholder = t('settings.signPlaceholder');
   }
 
   paintUsage();
   paintVersion();
-  paintWatermark();
+  paintPlaceholders();
 
   function refresh(): void {
     const prefs = options.getPrefs();
@@ -348,9 +375,12 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
    */
   dialog.addEventListener('input', (event) => {
     const input = event.target as HTMLInputElement | null;
-    if (input?.dataset['field'] !== 'watermarkText') return;
+    if (!input) return;
+    const field = input.dataset['field'];
+    // 两个文本框走同一条路：都是"用户原话"，都卡同一个长度上限
+    if (field !== 'watermarkText' && field !== 'signText') return;
     // maxlength 只在用户键入时生效，粘贴/IME 上屏仍可能超长，这里再截一次
-    options.onPrefs({ watermarkText: input.value.slice(0, 40) });
+    options.onPrefs({ [field]: input.value.slice(0, 40) } as Partial<SettingsRecord>);
   });
 
   // 点遮罩关闭：命中 dialog 本体（而不是 body 里任何子元素）才算点到外面
@@ -363,7 +393,7 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   onLocaleChange(() => {
     paintUsage();
     paintVersion();
-    paintWatermark();
+    paintPlaceholders();
   });
 
   return {

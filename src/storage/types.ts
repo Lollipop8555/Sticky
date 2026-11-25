@@ -59,6 +59,14 @@ export interface SettingsRecord {
   watermarkOn: boolean;
   /** 水印文字；空串表示"用默认文案"。存**用户原话**，不翻译（语言只翻界面） */
   watermarkText: string;
+  /**
+   * 尾签（决策 90）：便签末尾的一行签名。
+   * 它是卡片的**一部分**（屏幕上与导出图里都在），但不是内容的**一部分**
+   * —— 复制文本走的是 md，尾签压根不在那条路上。
+   */
+  signOn: boolean;
+  /** 尾签文字；空串表示"用默认文案"。同样存用户原话 */
+  signText: string;
   mobilePromptSeen: boolean;
   /**
    * 首访的示例便签是否已经放过（决策 65）。
@@ -113,6 +121,9 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   // 默认关：没跟用户打过招呼就往他的分享图里加字，是替他做决定
   watermarkOn: false,
   watermarkText: '',
+  // 默认关：这张卡的正文里突然多出一行不是用户写的东西，得先问过他
+  signOn: false,
+  signText: '',
   mobilePromptSeen: false,
   // 默认 false：全新库里该由 boot 放进那张示例便签。老库由 migrate / loadPrefs 兜成 true
   onboarded: false,

@@ -14,6 +14,7 @@ import type { NoteRecord } from '@/storage/types';
 
 import { docToFragment, mdToDoc } from './markdown';
 import { displayColor, textColor } from './palette';
+import { applyNoteSign, createNoteSign } from './sign';
 
 const BODY_ATTR = 'data-note-body';
 
@@ -132,7 +133,15 @@ export function createNoteEl(n: NoteRecord): HTMLElement {
     ),
   );
 
-  el.append(body, placeholder, grip, del, copy, textBtn);
+  /*
+   * 尾签（决策 90）：卡片的组成部分，但**不在 `.note-body` 里**。
+   * 放在 body 之后而不是之前，是因为正文短时它要跟着文字走（"末尾"），
+   * 而不是被 `min-height` 顶到卡底；放在 body 之外，编辑态的 Tiptap 才接管不到它。
+   */
+  const sign = createNoteSign();
+
+  el.append(body, placeholder, sign, grip, del, copy, textBtn);
+  applyNoteSign(el);
   patchNoteEl(el, n);
   return el;
 }
