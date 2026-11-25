@@ -92,8 +92,11 @@ test('缩放分档：0 全量 → 1 去阴影 → 2 色块 → 3（M4 前沿用�
   const cursor = (selector = '.note'): Promise<string> =>
     page.evaluate((sel) => getComputedStyle(document.querySelector(sel) as HTMLElement).cursor, selector);
 
-  // 全量态有正文可点，文字光标是"双击就能改字"的提示
-  expect(await cursor()).toBe('text');
+  /*
+   * 全量态也不是编辑区：既选不中文字，也放不下插入点。
+   * I 形光标是在许诺"能选字/能打字"，而这个许诺落不了地（编辑要双击），所以是默认光标。
+   */
+  expect(await cursor()).toBe('default');
 
   await page.mouse.move(512, 384);
   await page.keyboard.down('Control');

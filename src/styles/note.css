@@ -39,7 +39,13 @@
   overflow-wrap: anywhere;
   /* 静息态不选中：否则长按浮起时会把半张卡的文字一起拖蓝（编辑态在 .note-body 里恢复） */
   user-select: none;
-  cursor: text;
+  /*
+   * 静息态不是编辑区：既选不中文字，也放不下插入点，**I 形光标是在许诺一个做不到的操作**。
+   * 卡片主体唯一能做的动作是拖（长按浮起 / 直接拖），光标交给系统默认。
+   * 编辑态不受影响：`.note.is-editing` 是 `cursor: auto`，落在 contenteditable 里
+   * 仍由 UA 给出 I 形。
+   */
+  cursor: default;
 }
 
 .note-body p {
@@ -481,14 +487,14 @@
 }
 
 /*
- * 卡内"复制为图片"。与 .note-delete 同形，向左错开 24px 并排 ——
- * 单独写一份而不是合并选择器，是因为 .note-delete 那组规则还要被"浮起/编辑态收起"复用，
- * 合并起来每次改动都得同时改两处，反而更容易漏。
+ * 右上角三个按钮：删除（最靠边）、复制为图片、复制文本，各错开 24px。
+ *
+ * 两个"复制"同形，合并成一条规则；`.note-delete` 仍是独立的一份 —— 它那组规则还要被
+ * "浮起/编辑态收起"复用，合并起来每次改动都得同时改两处，反而更容易漏。
  */
-.note-copy {
+:is(.note-copy, .note-text) {
   position: absolute;
   top: 2px;
-  right: 26px;
   display: grid;
   place-items: center;
   width: 22px;
@@ -503,36 +509,45 @@
   transition: opacity 120ms ease, background 120ms ease;
 }
 
-.note-copy svg {
+.note-copy {
+  right: 26px;
+}
+
+/* 复制文本排在复制图片左边：图片那支更常用，离删除按钮近一点也更符合原有习惯 */
+.note-text {
+  right: 50px;
+}
+
+:is(.note-copy, .note-text) svg {
   display: block;
   width: 14px;
   height: 14px;
 }
 
-.note:hover .note-copy {
+.note:hover :is(.note-copy, .note-text) {
   opacity: 0.45;
 }
 
-.note-copy:hover {
+:is(.note-copy, .note-text):hover {
   opacity: 1;
   background: rgb(17 24 39 / 10%);
 }
 
-.note-copy:focus-visible {
+:is(.note-copy, .note-text):focus-visible {
   opacity: 1;
   outline: 2px solid var(--ui-accent, #2563eb);
   outline-offset: 1px;
 }
 
-/* 浮起/编辑时不摆这个按钮：编辑中要复制的是文字，不是整张卡的图 */
-.note.is-lifted .note-copy,
-.note.is-editing .note-copy {
+/* 浮起/编辑时不摆这两个按钮：编辑中要复制的是选中的几个字，系统那套 Cmd+C 更顺手 */
+.note.is-lifted :is(.note-copy, .note-text),
+.note.is-editing :is(.note-copy, .note-text) {
   opacity: 0;
   pointer-events: none;
 }
 
 @media (hover: none) {
-  .note-copy {
+  :is(.note-copy, .note-text) {
     opacity: 0.32;
     width: 26px;
     height: 26px;
@@ -540,7 +555,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .note-copy {
+  :is(.note-copy, .note-text) {
     transition: none;
   }
 }

@@ -30,6 +30,7 @@ export const ZH = {
   'note.drag': '拖动便签',
   'note.trash': '移入废纸篓',
   'note.copy': '复制为图片',
+  'note.copyText': '复制文本（可粘到 Word 等文档）',
 
   /* ---------------------------------------------------------------- 连线 */
   'link.menuTitle': '已连线（{n}）',
@@ -174,6 +175,10 @@ export const ZH = {
   'toast.imageInsertFailed': '图片插入失败',
   'toast.copied': '已复制为图片',
   'toast.copiedFallback': '这个浏览器不能直接复制图片，已改为下载',
+  'toast.copiedText': '已复制文本，可以直接粘到文档里',
+  'toast.copiedTextPlain': '这个浏览器只能复制纯文本',
+  'toast.copyTextFailed': '复制失败，请再试一次',
+  'toast.copyEmpty': '这张便签还是空的',
   'toast.renderFailed': '出图失败，请再试一次',
   'toast.wallEmpty': '墙上还没有便签',
   'toast.exported': '已导出 {n} 张便签',
@@ -227,6 +232,7 @@ export const EN: Record<MessageKey, string> = {
   'note.drag': 'Drag note',
   'note.trash': 'Move to trash',
   'note.copy': 'Copy as image',
+  'note.copyText': 'Copy text (paste into Word or any document)',
 
   /* ---------------------------------------------------------------- links */
   'link.menuTitle': 'Linked ({n})',
@@ -364,6 +370,10 @@ export const EN: Record<MessageKey, string> = {
   'toast.imageInsertFailed': "Couldn't insert the image",
   'toast.copied': 'Copied as image',
   'toast.copiedFallback': "This browser can't copy images — downloaded instead",
+  'toast.copiedText': 'Copied — paste it into any document',
+  'toast.copiedTextPlain': 'This browser can only copy plain text',
+  'toast.copyTextFailed': "Couldn't copy — try again",
+  'toast.copyEmpty': 'This note is still empty',
   'toast.renderFailed': 'Rendering failed, please try again',
   'toast.wallEmpty': 'There are no notes on the wall yet',
   'toast.exported': 'Exported {n} notes',

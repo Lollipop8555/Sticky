@@ -175,6 +175,7 @@ html[data-linking] .note:hover {
  */
 html[data-linking] .note-delete,
 html[data-linking] .note-copy,
+html[data-linking] .note-text,
 html[data-linking] .note-grip,
 html[data-linking] .fab,
 html[data-linking] .trash-anchor {

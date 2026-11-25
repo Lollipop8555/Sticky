@@ -306,6 +306,102 @@ test('复制为图片：进剪贴板（或退化成下载），卡不变', async
   await expect(page.locator('.note')).toHaveCount(1);
 });
 
+test('静息态不摆 I 形光标：卡片主体是默认光标，编辑态才回到文字输入', async ({ page }) => {
+  await boot(page);
+  await seedDB(page, {
+    notes: [noteRecord('c1', { x: 140, y: 140, contentMd: '一段**没法选中**的文字' })],
+  });
+  await page.reload();
+  const note = page.locator('.note');
+  await expect(note).toHaveCount(1);
+  await expect(note).toHaveAttribute('data-empty', 'false');
+  // 静息态既选不中、也放不下插入点：那道 I 形光标许诺的是一个做不到的操作
+  await expect(note).toHaveCSS('cursor', 'default');
+  await expect(page.locator('.note-body')).toHaveCSS('cursor', 'default');
+
+  await note.dblclick();
+  await expect(note).toHaveClass(/is-editing/);
+  await expect(note).toHaveCSS('cursor', 'auto');
+});
+
+test('复制为文本：剪贴板里是带内联样式的 HTML，纯文本不带 markdown 记号', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await boot(page);
+  await seedDB(page, {
+    notes: [
+      noteRecord('t1', {
+        x: 140,
+        y: 140,
+        contentMd: '**重点**内容，还有一点代码 `npm i`\n\n- 第一条\n- 第二条',
+      }),
+    ],
+  });
+  await page.reload();
+  await expect(page.locator('.note')).toHaveCount(1);
+
+  await page.locator('.note').hover();
+  await page.locator('.note-text').click();
+  await expect(page.locator('.toast')).toContainText(/已复制文本|只能复制纯文本/, {
+    timeout: 15_000,
+  });
+
+  const clip = await page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    const html = items.find((one) => one.types.includes('text/html'));
+    const plain = items.find((one) => one.types.includes('text/plain'));
+    return {
+      html: html ? await (await html.getType('text/html')).text() : '',
+      plain: plain ? await (await plain.getType('text/plain')).text() : '',
+    };
+  });
+
+  /*
+   * 粘进 Word 的是 HTML 这一份：语义标签要在、样式要内联（目标文档不会带我们的 CSS 走），
+   * 而且不能是 markdown 源码 —— 那粘过去就是一堆星号和反引号。
+   */
+  expect(clip.html).toContain('<strong');
+  expect(clip.html).toContain('<code');
+  expect(clip.html).toContain('<li');
+  expect(clip.html).toContain('font-family');
+  expect(clip.html).not.toContain('**');
+
+  // 记事本/聊天框读的是纯文本这一份：内容在，记号不在
+  expect(clip.plain).toContain('重点');
+  expect(clip.plain).toContain('第一条');
+  expect(clip.plain).not.toContain('**');
+  expect(clip.plain).not.toContain('`');
+});
+
+test('复制为文本：卡上的图也一起带走（剪贴板里是 data URL，不是 blob）', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await boot(page);
+  await dropTallImage(page);
+  await expect(page.locator('.note-body img.note-img')).toHaveAttribute('src', /^blob:/, {
+    timeout: 15_000,
+  });
+
+  await page.locator('.note').hover();
+  await page.locator('.note-text').click();
+  await expect(page.locator('.toast')).toContainText(/已复制文本|只能复制纯文本/, {
+    timeout: 15_000,
+  });
+
+  const html = await page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    const item = items.find((one) => one.types.includes('text/html'));
+    return item ? await (await item.getType('text/html')).text() : '';
+  });
+  // blob: 出了这个页面就是死链，Word 拿到的是一个空图框
+  expect(html).toContain('src="data:image');
+  expect(html).not.toContain('blob:');
+});
+
 test('设置 → 导出整墙图片：拿到一张 PNG', async ({ page }) => {
   await boot(page);
   await seedDB(page, {

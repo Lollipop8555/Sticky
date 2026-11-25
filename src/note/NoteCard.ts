@@ -108,7 +108,31 @@ export function createNoteEl(n: NoteRecord): HTMLElement {
     ),
   );
 
-  el.append(body, placeholder, grip, del, copy);
+  /*
+   * 复制为富文本：粘进 Word / WPS 保留粗体、列表、链接与图片。
+   * 图标不能再借"分享"：两个按钮并排，一个 share-2 一个 copy 才分得清
+   * "复制成一张图"与"复制成可以编辑的文字"。
+   */
+  const textBtn = document.createElement('button');
+  textBtn.type = 'button';
+  textBtn.className = 'note-text';
+  textBtn.dataset['act'] = 'text';
+  textBtn.setAttribute('data-no-pan', '');
+  setAria(textBtn, 'note.copyText');
+  setTitle(textBtn, 'note.copyText');
+  textBtn.append(
+    lineIcon(
+      [
+        // 右下那张"纸"：圆角矩形，从 24 网格里收进 7..22 的范围，和分享图标的墨迹大小对齐
+        'M10 8h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9a3 3 0 0 1 3-3z',
+        // 左上那张被压在下面的：只画露出来的 L 形，避免两条边在 14px 下糊成一团
+        'M6 16H5a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v1',
+      ],
+      1.6,
+    ),
+  );
+
+  el.append(body, placeholder, grip, del, copy, textBtn);
   patchNoteEl(el, n);
   return el;
 }

@@ -17,11 +17,13 @@
 import { commands } from '@/app/commands';
 import { getPrefs } from '@/app/prefs';
 import type { AppShell } from '@/app/shell';
+import { store } from '@/app/store';
 import { t } from '@/i18n';
 
 import { getEditingId, startEditing, stopEditing } from '@/note/editing';
 import { openLightbox } from '@/note/lightbox';
 import { exportNoteImage } from '@/io/png';
+import { copyNoteText } from '@/io/richtext';
 
 import { restoreNote, trashNote } from '@/trash/trash';
 import { toast } from '@/ui/toast';
@@ -156,11 +158,34 @@ export function attachInteractions(shell: AppShell): () => void {
     void exportNoteImage(id);
   };
 
+  /**
+   * 卡上"复制文本"：写出去的是**标准 HTML**（内联样式 + data URL 图），
+   * 粘到 Word / WPS / 飞书里能保留粗体、列表、链接与图片（决策 84）。
+   */
+  const onTextClick = (event: MouseEvent): void => {
+    if (!(event.target instanceof Element)) return;
+    const btn = event.target.closest<HTMLElement>('[data-act="text"]');
+    if (!btn) return;
+    const id = btn.closest<HTMLElement>('[data-note-id]')?.dataset['noteId'];
+    if (!id) return;
+    event.stopPropagation();
+
+    const note = store.getNote(id);
+    if (!note) return;
+    void copyNoteText(note.contentMd).then((outcome) => {
+      if (outcome === 'rich') toast(t('toast.copiedText'));
+      else if (outcome === 'plain') toast(t('toast.copiedTextPlain'));
+      else if (outcome === 'empty') toast(t('toast.copyEmpty'));
+      else toast(t('toast.copyTextFailed'));
+    });
+  };
+
   shell.viewport.addEventListener('pointerdown', onPointerDown);
   shell.viewport.addEventListener('dblclick', onDblClick);
   shell.viewport.addEventListener('click', onClick);
   shell.noteLayer.addEventListener('click', onTrashClick);
   shell.noteLayer.addEventListener('click', onCopyClick);
+  shell.noteLayer.addEventListener('click', onTextClick);
 
   return () => {
     shell.viewport.removeEventListener('pointerdown', onPointerDown);
@@ -168,5 +193,6 @@ export function attachInteractions(shell: AppShell): () => void {
     shell.viewport.removeEventListener('click', onClick);
     shell.noteLayer.removeEventListener('click', onTrashClick);
     shell.noteLayer.removeEventListener('click', onCopyClick);
+    shell.noteLayer.removeEventListener('click', onTextClick);
   };
 }
