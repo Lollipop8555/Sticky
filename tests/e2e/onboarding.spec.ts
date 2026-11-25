@@ -17,7 +17,7 @@ test('新用户第一次打开：墙上一张示例便签，只放一次', async
   });
   const page = await context.newPage();
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
   await expect(page.locator('#app')).toHaveAttribute('data-notes', '1');
 
@@ -69,14 +69,14 @@ test('?reset=1 删掉本地库，回到首访状态', async ({ browser }) => {
   });
   const page = await context.newPage();
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-notes', '1');
 
-  await page.goto('/?reset=1');
+  await page.goto('./?reset=1');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 
-  // 参数被抹掉，否则刷新一次清一次
-  expect(page.url()).toBe(BASE_URL + '/');
+  // 参数被抹掉，否则刷新一次清一次（BASE_URL 自带结尾斜杠 + 部署基路径）
+  expect(page.url()).toBe(BASE_URL);
   // 库被真正删掉 → 又走了一遍首访，示例便签回来了
   await expect(page.locator('#app')).toHaveAttribute('data-notes', '1');
   await expect(page.locator('.note')).toHaveCount(1);

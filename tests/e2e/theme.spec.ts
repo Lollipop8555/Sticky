@@ -11,7 +11,7 @@ import { noteRecord, seedDB } from './helpers';
 
 const BASE = '#F9D5E5'; // 马卡龙池里的粉色，已入库的"基色"
 
-async function boot(page: Page, url = '/'): Promise<void> {
+async function boot(page: Page, url = './'): Promise<void> {
   await page.goto(url);
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 }
@@ -59,7 +59,7 @@ test('四种材质：卡色跟着背景走，库里的基色一个字都不改',
 
   for (const bg of ['paper', 'kraft', 'grid', 'blackboard'] as const) {
     // 预览口只改视觉、不写 prefs —— 所以四次访问读到的都是同一份记录
-    await page.goto(`/?bg=${bg}`);
+    await page.goto(`./?bg=${bg}`);
     await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-background', bg);
     await expect(page.locator('.note')).toHaveCount(1);

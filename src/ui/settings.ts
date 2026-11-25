@@ -176,9 +176,13 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   const mobileInput = el(doc, 'input');
   mobileInput.type = 'checkbox';
   mobileInput.dataset['field'] = 'mobileMode';
-  const mobileText = txt(doc, 'span', '', 'settings.mobile');
-  const mobileHint = txt(doc, 'small', 'opt-hint', 'settings.mobileHint');
-  mobileRow.append(mobileInput, mobileText, mobileHint);
+  // 标题一行、说明一行（决策 71）：说明塞在标题右边时，320px 的面板装不下，会把面板撑破
+  const mobileText = el(doc, 'span', 'opt-text');
+  mobileText.append(
+    txt(doc, 'span', '', 'settings.mobile'),
+    txt(doc, 'small', 'opt-hint', 'settings.mobileHint'),
+  );
+  mobileRow.append(mobileInput, mobileText);
   feel.append(mobileRow);
 
   // ---- 数据 ----

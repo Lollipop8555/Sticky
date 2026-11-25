@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { DEPLOY_BASE } from './deploy-base';
+
 const srcDir = fileURLToPath(new URL('./src', import.meta.url));
 // 设置面板要显示版本号；从清单里读一次注入，而不是把整份 package.json 打进产物
 const { version } = JSON.parse(
@@ -20,8 +22,10 @@ const { version } = JSON.parse(
  * 类型不兼容，把两边塞进同一个 defineConfig 会得到一屏 "PluginOption 不能赋值"。
  */
 export default defineConfig({
-  // 站点部署在域名根（决策 31）。改成项目页只需把这里换成 '/sticky-wall/'。
-  base: '/',
+  // GitHub Pages 项目页部署在子路径（`https://looly.top/Sticky/`）：base 必须是
+  // `/Sticky/`，否则 `index.html` 会去域名根取 `/assets/*.js` → 404 → 白屏（决策 72）。
+  // 换路径用环境变量，不要改代码：`PUBLIC_BASE=/foo/ npm run build`。
+  base: DEPLOY_BASE,
   resolve: {
     alias: { '@': srcDir },
   },
@@ -46,18 +50,21 @@ export default defineConfig({
         short_name: '便签墙',
         description: '无限画布上的便签墙，数据只存在你自己的浏览器里。',
         lang: 'zh-CN',
-        // 站点部署在域名根：用绝对值，不用 './'（否则 scope 判断会出错，impl-00 §8）
-        start_url: '/',
-        scope: '/',
+        // 绝对路径，但要**跟着 base 走**（决策 72）：写成 '/' 时从主屏图标打开会跳到域名根，
+        // 而根下没有这个应用 —— 用户看到的是一张白页
+        start_url: DEPLOY_BASE,
+        scope: DEPLOY_BASE,
         display: 'standalone',
         // manifest 里的主题色是静态的；切换材质只改 <meta name="theme-color">（tech-design §5）
         theme_color: '#F5F2EC',
         background_color: '#ffffff',
+        // manifest 里的相对路径是相对 **manifest 自身**解析的，但装到主屏后图标请求会
+        // 回到站点根 —— 子路径部署下必须显式带 base，否则装了也是白图标
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: `${DEPLOY_BASE}icons/icon-192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `${DEPLOY_BASE}icons/icon-512.png`, sizes: '512x512', type: 'image/png' },
           {
-            src: '/icons/maskable-512.png',
+            src: `${DEPLOY_BASE}icons/maskable-512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -67,7 +74,9 @@ export default defineConfig({
       workbox: {
         // 应用本体很小，全量预缓存；数据在 IDB 里，**不进缓存**
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
-        navigateFallback: '/index.html',
+        // 离线回退也要落在子路径里：`/index.html` 在子路径部署下指向的是**域名根**，
+        // 而根下没有 app，离线打开就是白屏（决策 72）
+        navigateFallback: `${DEPLOY_BASE}index.html`,
         cleanupOutdatedCaches: true,
       },
     }),

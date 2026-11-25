@@ -10,7 +10,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 async function booted(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 }
 

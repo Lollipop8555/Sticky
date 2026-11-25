@@ -415,11 +415,15 @@
 
 /* 勾选行：复选框要真的看得见，所以这里把绝对定位还原掉 */
 .opt-row {
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 8px;
   margin-top: 12px;
   padding: 4px 2px;
   font-size: 13px;
+  /* `.opt` 的 nowrap 是给分段控件（"双击空白 / 右下角 +"）用的；
+     勾选行的说明必须能换行，否则它会把 320px 的面板往外顶（决策 71） */
+  white-space: normal;
 }
 
 .opt-row:hover {
@@ -428,15 +432,25 @@
 
 .opt-row input {
   position: static;
+  flex: none; /* 文案很长时别把复选框压扁：16px 的框必须是 16px */
   width: 16px;
   height: 16px;
+  margin-top: 1px; /* 16px 的框对 18px 的首行，往下压 1px 才和文字视觉居中 */
   opacity: 1;
   accent-color: var(--ui-accent);
 }
 
+/* 勾选行的标题 + 说明：上下两行，说明跟着面板宽度自己换行 */
+.opt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* flex 子项默认 min-width:auto，长文案会拒绝换行 */
+}
+
 .opt-hint {
-  margin-left: auto;
   font-size: 11px;
+  line-height: 1.45;
   color: var(--ui-fg-soft);
 }
 

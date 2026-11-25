@@ -10,7 +10,7 @@ import { noteRecord, seedDB } from './helpers';
  */
 
 async function boot(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 }
 

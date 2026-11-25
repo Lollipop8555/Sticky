@@ -34,6 +34,9 @@ jobs:
 
       - name: Build
         # build 内含 tsc --noEmit，类型错误会挡住发布
+        # 项目页地址随仓库名走（https://looly.top/<repo>/），base 不该硬编码在代码里（决策 72）
+        env:
+          PUBLIC_BASE: /${{ github.event.repository.name }}/
         run: npm run build
 
       - uses: actions/configure-pages@v5

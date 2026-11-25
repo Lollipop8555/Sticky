@@ -26,7 +26,7 @@ function gridNotes(): Record<string, unknown>[] {
 }
 
 async function bootWithGrid(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
   await seedDB(page, {
     notes: gridNotes(),

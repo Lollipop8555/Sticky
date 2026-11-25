@@ -10,7 +10,7 @@ import { noteRecord, seedDB } from './helpers';
  */
 
 async function boot(page: Page, data: Parameters<typeof seedDB>[1] = {}): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
   if (Object.keys(data).length > 0) {
     await seedDB(page, data);
@@ -85,6 +85,33 @@ test('背景与调色板：即时写 dataset 与 theme-color，刷新后保持',
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'monet');
 });
 
+test('移动兼容模式的说明排在标题下方，说明再长也不撑破面板', async ({ page }) => {
+  await boot(page);
+  await openSettings(page);
+
+  const title = (await page.locator('.opt-row .opt-text > span').boundingBox())!;
+  const hint = (await page.locator('.opt-row .opt-hint').boundingBox())!;
+
+  // 两行：说明在标题**下方**，且左对齐同一列（不是 `margin-left:auto` 顶到行尾）
+  expect(hint.y).toBeGreaterThanOrEqual(title.y + title.height - 0.5);
+  expect(Math.abs(hint.x - title.x)).toBeLessThan(1);
+
+  const overflow = async (): Promise<{ sheet: number; body: number }> =>
+    page.evaluate(() => {
+      const sheet = document.querySelector('.sheet-settings') as HTMLElement;
+      const body = sheet.querySelector('.sheet-body') as HTMLElement;
+      return { sheet: sheet.scrollWidth - sheet.clientWidth, body: body.scrollWidth - body.clientWidth };
+    });
+
+  // 320px 是面板的自身宽度，也是窄屏抽屉的下限：说明必须自己换行，不能把内容往外顶
+  expect(await overflow()).toEqual({ sheet: 0, body: 0 });
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect(await overflow()).toEqual({ sheet: 0, body: 0 });
+
+  // 复选框不能被长文案压扁
+  expect((await page.locator('.opt-row input').boundingBox())?.width).toBeCloseTo(16, 0);
+});
+
 test('移动模式：控件放大、手柄常驻，且落库', async ({ page }) => {
   await boot(page, { notes: [noteRecord('n1', { contentMd: '移动' })] });
 
@@ -140,7 +167,7 @@ test.describe('触屏设备', () => {
   test.use({ hasTouch: true });
 
   test('首次访问问一次移动模式；选"不用了"后刷新不再问', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
 
     const prompt = page.locator('.sheet-prompt');
     await expect(prompt).toBeVisible();

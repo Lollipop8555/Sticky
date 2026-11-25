@@ -13,7 +13,7 @@ const LONG_PRESS = 400;
 const CARD = { x: 300, y: 200 };
 
 async function seedOne(page: Page, patch: Record<string, unknown> = {}): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
   await seedDB(page, {
     notes: [noteRecord('n1', { ...CARD, contentMd: '拖动我', ...patch })],

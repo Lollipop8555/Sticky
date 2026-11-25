@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 async function createNote(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
   await page.mouse.dblclick(640, 400);
   await expect(page.locator('.note.is-editing')).toHaveCount(1);
@@ -102,7 +102,7 @@ test('粘贴大图：压缩入库、卡内显示、刷新后仍在', async ({ pa
 });
 
 test('md 里手写的外链图片不加载，只显示占位（CSP 不放行 https，也不该悄悄发请求）', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 
   await page.evaluate(async () => {

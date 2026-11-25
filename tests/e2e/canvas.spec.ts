@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { readTransform, worldAt } from './helpers';
 
 test('空白处拖动平移画布，位移与指针一致', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
 
   const before = await readTransform(page);
   expect(before).toEqual({ scale: 1, panX: 0, panY: 0 });
@@ -21,7 +21,7 @@ test('空白处拖动平移画布，位移与指针一致', async ({ page }) => 
 });
 
 test('拖动结束后画布不"粘"在指针上（capture 已释放）', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
 
   await page.mouse.move(300, 300);
   await page.mouse.down();
@@ -38,7 +38,7 @@ test('拖动结束后画布不"粘"在指针上（capture 已释放）', async (
 });
 
 test('Ctrl+滚轮以光标为锚点缩放：光标下的世界坐标不动', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
 
   const anchor = { sx: 412, sy: 288 };
   await page.mouse.move(anchor.sx, anchor.sy);
@@ -59,7 +59,7 @@ test('Ctrl+滚轮以光标为锚点缩放：光标下的世界坐标不动', asy
 });
 
 test('普通滚轮默认平移（wheelMode=pan），不缩放', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
 
   const before = await readTransform(page);
   await page.mouse.move(500, 400);
@@ -71,7 +71,7 @@ test('普通滚轮默认平移（wheelMode=pan），不缩放', async ({ page })
 });
 
 test('缩放比例被夹在 [0.002, 3] 之间', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   await page.mouse.move(500, 400);
 
   await page.keyboard.down('Control');
@@ -90,7 +90,7 @@ test('缩放比例被夹在 [0.002, 3] 之间', async ({ page }) => {
 });
 
 test('网格层跟随平移与缩放（世界坐标系里的方格纸）', async ({ page }) => {
-  await page.goto('/?bg=grid');
+  await page.goto('./?bg=grid');
 
   const gridBefore = await page.evaluate(() =>
     getComputedStyle(document.querySelector('.viewport') as HTMLElement, '::after')
@@ -112,7 +112,7 @@ test('网格层跟随平移与缩放（世界坐标系里的方格纸）', async
 });
 
 test('页面本身不滚动、不选中文字（滚轮与拖拽都被画布吃掉）', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
 
   await page.mouse.move(400, 300);
   await page.mouse.down();

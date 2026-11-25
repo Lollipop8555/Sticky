@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 /** 在视口中心双击建一张卡并进入编辑态 */
 async function createNote(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 
   await page.mouse.dblclick(640, 400);

@@ -10,7 +10,7 @@ import { noteRecord, readTransform, seedDB } from './helpers';
  * 那半个 bug 在 DevTools 里看起来一切正常，只有页面知道。
  */
 
-async function booted(page: Page, path = '/'): Promise<void> {
+async function booted(page: Page, path = './'): Promise<void> {
   await page.goto(path);
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 }
@@ -153,7 +153,7 @@ test('存储不可用时降级为内存模式，不白屏', async ({ page }) => 
     });
   });
 
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
   await expect(page.locator('#viewport')).toBeVisible();
   // 视口与手势照常可用：存储挂了不该把画布一起带下水

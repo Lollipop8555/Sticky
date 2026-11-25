@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { DEPLOY_BASE } from '../../deploy-base';
+
 /**
  * S9 的验收线是"断网刷新还能打开"，这条只能对着**构建产物**验：
  * SW 是 vite build 生成的，dev server 下根本没有（也没必要有）。
@@ -19,7 +21,7 @@ async function waitForControlled(page: import('@playwright/test').Page): Promise
 }
 
 test('构建产物带 manifest：字段与图标都能真的取到', async ({ page, request }) => {
-  await page.goto('/');
+  await page.goto('./');
 
   const href = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(href).toBeTruthy();
@@ -35,9 +37,10 @@ test('构建产物带 manifest：字段与图标都能真的取到', async ({ pa
     icons: { src: string; sizes: string; purpose?: string }[];
   };
 
-  // 站点在域名根：start_url/scope 必须是 '/'，否则安装后的窗口会打到子路径（impl-00 §8）
-  expect(manifest.start_url).toBe('/');
-  expect(manifest.scope).toBe('/');
+  // 部署在子路径：start_url/scope 必须跟着 base 走（决策 72）。
+  // 写成 '/' 时从主屏图标打开会跳到域名根，而根下没有 app —— 白页
+  expect(manifest.start_url).toBe(DEPLOY_BASE);
+  expect(manifest.scope).toBe(DEPLOY_BASE);
   expect(manifest.display).toBe('standalone');
   expect(manifest.theme_color).toBe('#F5F2EC');
 
@@ -49,11 +52,16 @@ test('构建产物带 manifest：字段与图标都能真的取到', async ({ pa
   }
 
   // iOS 加主屏用的是这个，跟 manifest 无关
-  expect((await request.get('/icons/apple-touch-icon.png')).ok()).toBe(true);
+  expect((await request.get(`${DEPLOY_BASE}icons/apple-touch-icon.png`)).ok()).toBe(true);
+
+  // 首屏资源必须落在 base 下：`/assets/*.js` 会 404，症状是整页空白（本次线上事故）
+  const script = await page.locator('script[type="module"]').first().getAttribute('src');
+  expect(script?.startsWith(DEPLOY_BASE)).toBe(true);
+  expect((await request.get(script!)).ok()).toBe(true);
 });
 
 test('Service Worker 接管后断网刷新仍能打开（应用壳生效）', async ({ page, context }) => {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 
   await waitForControlled(page);
@@ -68,7 +76,7 @@ test('Service Worker 接管后断网刷新仍能打开（应用壳生效）', as
 });
 
 test('断网时本地库照常读写（离线不是只读模式）', async ({ page, context }) => {
-  await page.goto('/');
+  await page.goto('./');
   await waitForControlled(page);
 
   await context.setOffline(true);
