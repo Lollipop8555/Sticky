@@ -116,6 +116,42 @@ describe('repo', () => {
     expect(second[0]?.x).toBe(1);
   });
 
+  it('links 行：写入后读回，读时排序归一、自连与重复丢弃', async () => {
+    // 故意写脏：反向对、自连、重复项 —— 落库不管，读的时候统一洗
+    await repo.savePrefs({
+      links: [
+        ['b', 'a'],
+        ['a', 'a'],
+        ['a', 'b'],
+        ['c', 'b'],
+      ] as const,
+    });
+
+    const prefs = await repo.loadPrefs();
+    expect(prefs.links).toEqual([
+      ['a', 'b'],
+      ['b', 'c'],
+    ]);
+  });
+
+  it('links 行可以写成空数组（清空连线），且老库没有这一行时是空边集', async () => {
+    expect((await repo.loadPrefs()).links).toEqual([]);
+
+    await repo.savePrefs({ links: [['a', 'b']] as const });
+    await repo.savePrefs({ links: [] });
+    expect((await repo.loadPrefs()).links).toEqual([]);
+  });
+
+  it('links 行被写坏时回落空边集，不影响其他偏好', async () => {
+    const db = await openDB();
+    await db.put('prefs', { key: 'links', value: 'not-an-array' as never });
+    await db.put('prefs', { key: 'settings', value: { wheelMode: 'zoom' } as never });
+
+    const prefs = await repo.loadPrefs();
+    expect(prefs.links).toEqual([]);
+    expect(prefs.wheelMode).toBe('zoom');
+  });
+
   it('assets 存取（图片便签要用 w/h 免解 Blob）', async () => {
     const blob = new Blob(['x'], { type: 'image/png' });
     await repo.putAssets([

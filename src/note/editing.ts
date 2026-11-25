@@ -24,6 +24,16 @@ interface Session {
 
 let session: Session | null = null;
 
+/**
+ * 格式条上的大头针要打开连线列表（决策 75）。由 main 注入，editing 不直接依赖 link 层：
+ * 否则 note/ 反拖 link/ 进依赖图，编辑器的单测要连 DOM 菜单一起跑。
+ */
+let linkOpener: ((noteId: string, card: HTMLElement) => void) | null = null;
+
+export function setLinkOpener(fn: (noteId: string, card: HTMLElement) => void): void {
+  linkOpener = fn;
+}
+
 export function getEditingId(): string | null {
   return session?.id ?? null;
 }
@@ -59,7 +69,7 @@ export function startEditing(id: string, point?: { clientX: number; clientY: num
     onSelection: (state: FormatState) => bar?.sync(state),
   });
 
-  bar = mountFormatBar(el, handle);
+  bar = mountFormatBar(el, handle, (noteId, card) => linkOpener?.(noteId, card));
 
   session = { id, el, handle, bar };
   store.setState({ editingId: id });

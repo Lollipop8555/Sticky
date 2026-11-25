@@ -12,6 +12,7 @@ import {
   poolColors,
   relativeLuminance,
   textColor,
+  threadColor,
 } from '@/note/palette';
 import type { NoteRecord } from '@/storage/types';
 
@@ -179,5 +180,46 @@ describe('自动取色', () => {
       expect(displayColor(base, bg)).toBeTypeOf('string');
       expect(base).toBe(pool[3]);
     }
+  });
+});
+
+/**
+ * 毛线色（决策 74）。两条硬要求：
+ * 1. 不同卡片的线色**必须不同** —— 否则一条线两端同色，渐变等于不存在（曾经的实现用
+ *    `textColor` 就是这样：不是近黑就是近白，全部连线长得一模一样）；
+ * 2. 在任何材质上都要看得见 —— 与卡片显示色的对比度不能塌到"糊成一片"。
+ */
+describe('threadColor', () => {
+  const pool = poolColors('macaron');
+
+  it('同一张卡片的线色稳定（按 底色+卡片色 缓存）', () => {
+    const shown = displayColor(pool[0] ?? '', 'paper');
+    expect(threadColor(shown, 'paper')).toBe(threadColor(shown, 'paper'));
+  });
+
+  it('12 个池内色的线色互不相同（两端不同色才有渐变可看）', () => {
+    const seen = new Set(
+      pool.map((base) => threadColor(displayColor(base, 'paper'), 'paper')),
+    );
+    expect(seen.size).toBe(pool.length);
+  });
+
+  it('深浅两种材质上都与卡片色拉开距离', () => {
+    for (const bg of ['paper', 'blackboard'] as const) {
+      for (const base of pool) {
+        const shown = displayColor(base, bg);
+        const thread = threadColor(shown, bg);
+        const ratio = contrastRatio(relativeLuminance(shown), relativeLuminance(thread));
+        // 与卡片色的对比度 1.6 以上：线压在卡上/挨着卡时仍分得清
+        expect(ratio).toBeGreaterThan(1.6);
+      }
+    }
+  });
+
+  it('黑板上的线只会变亮，浅底上的线只会变暗', () => {
+    const shown = displayColor(pool[0] ?? '', 'paper');
+    const dark = hexToHsl(threadColor(shown, 'blackboard')).l;
+    const light = hexToHsl(threadColor(shown, 'paper')).l;
+    expect(dark).toBeGreaterThan(light);
   });
 });

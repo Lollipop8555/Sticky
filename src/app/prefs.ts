@@ -14,10 +14,13 @@ import {
   type ViewportRecord,
 } from '@/storage/types';
 
+import { normalizeLinks } from '@/link/links';
+import type { LinkPair } from '@/storage/types';
+
 import { applyLocale, isLocale } from '@/i18n';
 import { applyBackground, applyPalette, applyTypography } from './theme';
 
-let current: PrefsRecord = { ...DEFAULT_PREFS, lastViewport: { ...DEFAULT_VIEWPORT } };
+let current: PrefsRecord = { ...DEFAULT_PREFS, lastViewport: { ...DEFAULT_VIEWPORT }, links: [] };
 
 /** 视觉相关的字段变了才需要重刷主题，纯行为字段（wheelMode 等）改动不该触发全量重绘 */
 const VISUAL_KEYS = ['background', 'palette', 'baseFontSize'] as const;
@@ -41,6 +44,8 @@ export function initPrefs(stored: PrefsRecord, doc: Document = document): void {
     // 老库没有 lang / 库里被写坏了都兜回中文：语言错了整个界面都是天书，不能靠"缺省解构"碰运气
     lang: isLocale(stored.lang) ? stored.lang : DEFAULT_PREFS.lang,
     lastViewport: { ...stored.lastViewport },
+    // 坏形状一律回落空边集：宁可少几根线，也不能让一行脏数据卡住启动
+    links: normalizeLinks(stored.links),
   };
   applyVisuals(current, doc);
   // 语言先于任何 UI 挂载：boot 后面的 buildControls / 卡片都用 t() 取文案
@@ -85,6 +90,35 @@ export function rememberViewport(viewport: ViewportRecord): void {
   markPrefsDirty();
 }
 
+/** 边集快照。渲染层与菜单只读它，改边集一律走 `setLinks` */
+export function getLinks(): readonly LinkPair[] {
+  return current.links;
+}
+
+/**
+ * 替换边集并落库。整体替换而不是增量改内存：边集是"一组对"的真相，
+ * 增量 API 会让两个调用方各改一半，最后谁都不完整。
+ */
+export function setLinks(pairs: readonly LinkPair[]): void {
+  const next = normalizeLinks(pairs);
+  const prev = current.links;
+  // 内容相同就不标脏：拖动/渲染路径会反复调，白写一次库不值得
+  if (next.length === prev.length) {
+    let same = true;
+    for (let i = 0; i < next.length; i += 1) {
+      const a = next[i];
+      const b = prev[i];
+      if (!a || !b || a[0] !== b[0] || a[1] !== b[1]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return;
+  }
+  current = { ...current, links: next };
+  markPrefsDirty();
+}
+
 export function rememberSettings(): SettingsRecord {
   const {
     background,
@@ -114,5 +148,5 @@ export function rememberSettings(): SettingsRecord {
 
 /** 仅供测试：把内存态复位 */
 export function __resetPrefs(): void {
-  current = { ...DEFAULT_PREFS, lastViewport: { ...DEFAULT_VIEWPORT } };
+  current = { ...DEFAULT_PREFS, lastViewport: { ...DEFAULT_VIEWPORT }, links: [] };
 }

@@ -193,6 +193,8 @@ export function showImportSummary(result: ImportResult, doc: Document = document
   if (result.renamedAssets > 0) {
     lines.push(t('io.summaryAssetsRenamed', { n: result.renamedAssets }));
   }
+  // 只报"新增"：包里重复的边被合并掉了，说总数会让用户以为线变多了
+  if (result.addedLinks > 0) lines.push(t('io.summaryLinks', { n: result.addedLinks }));
   if (result.skipped > 0) lines.push(t('io.summarySkipped', { n: result.skipped }));
   lines.push(
     !result.hasSettings

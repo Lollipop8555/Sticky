@@ -7,6 +7,7 @@
  */
 
 import { isLocale } from '@/i18n';
+import { normalizeLinks } from '@/link/links';
 
 import { openDB } from './db';
 import {
@@ -15,6 +16,7 @@ import {
   DEFAULT_VIEWPORT,
   SCHEMA_VERSION,
   type AssetRecord,
+  type LinkPair,
   type NoteRecord,
   type PrefsRecord,
   type SettingsRecord,
@@ -51,15 +53,18 @@ export const repo = {
    */
   async loadPrefs(): Promise<PrefsRecord> {
     const db = await openDB();
-    const [settings, viewport, counters] = await Promise.all([
+    const [settings, viewport, counters, links] = await Promise.all([
       db.get('prefs', 'settings'),
       db.get('prefs', 'viewport'),
       db.get('prefs', 'counters'),
+      db.get('prefs', 'links'),
     ]);
 
     const s = settings?.key === 'settings' ? settings.value : DEFAULT_SETTINGS;
     const v = viewport?.key === 'viewport' ? viewport.value : DEFAULT_VIEWPORT;
     const c = counters?.key === 'counters' ? counters.value : { zCounter: 0 };
+    // 老库没有这一行（决策 73：不为一行数据升 SCHEMA_VERSION），读不到就是空边集
+    const l = links?.key === 'links' ? links.value : [];
 
     return {
       ...DEFAULT_SETTINGS,
@@ -71,6 +76,8 @@ export const repo = {
       lang: isLocale(s.lang) ? s.lang : DEFAULT_SETTINGS.lang,
       lastViewport: { ...DEFAULT_VIEWPORT, ...v },
       zCounter: Number.isFinite(c?.zCounter) ? c.zCounter : 0,
+      // 逐条校验：库里可能躺着早期版本的坏数据或手工改过的行
+      links: normalizeLinks(l),
       schemaVersion: SCHEMA_VERSION,
     };
   },
@@ -79,6 +86,7 @@ export const repo = {
     settings?: Partial<SettingsRecord>;
     viewport?: ViewportRecord;
     counters?: { zCounter: number };
+    links?: readonly LinkPair[];
   }): Promise<void> {
     const db = await openDB();
     const tx = db.transaction('prefs', 'readwrite');
@@ -94,6 +102,10 @@ export const repo = {
     }
     if (patch.counters) {
       await tx.store.put({ key: 'counters', value: patch.counters });
+    }
+    // 空数组也是"有效值"：清空连线必须能写下去，所以判的是 undefined 而不是 length
+    if (patch.links) {
+      await tx.store.put({ key: 'links', value: [...patch.links] });
     }
 
     await tx.done;

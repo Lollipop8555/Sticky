@@ -1,0 +1,281 @@
+/*
+ * 连线层（决策 74）。
+ *
+ * z-index: 1 是"线在便签之上"的唯一来源：
+ * `.world` 带 will-change: transform，卡片自己的 z-index（可到几万）被封在它自己的层叠上下文里，
+ * 出不来，所以这里只要比 .world 高就够。**别把这个 1 删掉**，删了线就会钻到卡片下面。
+ *
+ * pointer-events: none —— 不抢点击、不挡拖动、不挡右键。这条是"线不可交互"的全部实现。
+ */
+.link-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* 线宽恒定：没有 non-scaling-stroke，`<g>` 的 scale 会把 2.5px 放大成 2.5×scale */
+.link-layer .link {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.link-layer .link-dot {
+  stroke: none;
+  vector-effect: non-scaling-stroke;
+}
+
+/*
+ * 连线列表 popover（决策 75）。挂在 body 上、position: fixed ——
+ * 挂进 #viewport 会让列表滚动连带缩放画布（滚轮监听在那里）。
+ */
+.link-menu {
+  position: fixed;
+  z-index: var(--z-panel);
+  box-sizing: border-box;
+  min-width: 232px;
+  max-width: 300px;
+  padding: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-lg);
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg);
+  box-shadow: var(--ui-shadow-2);
+  font: inherit;
+}
+
+/* hidden 属性要能压过 display:grid 之类的默认值 */
+.link-menu[hidden] {
+  display: none;
+}
+
+.link-menu-head {
+  padding: 4px 8px 8px;
+  font-size: 12px;
+  color: var(--ui-fg-soft);
+}
+
+/* 内容多了自己滚。overscroll-behavior 防止滚到底连带滚动画布（移动端回弹） */
+.link-menu-list {
+  display: grid;
+  gap: 6px;
+  max-height: 46vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* 整行是目标便签的底色，左右两栏共用：左边点跳转，右边剪刀断开 */
+.link-menu-item {
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.link-menu-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.link-menu-pick:hover,
+.link-menu-pick:focus-visible {
+  filter: brightness(0.96);
+}
+
+.link-menu-pick:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+
+.link-menu-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.link-menu-cut {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  border: 0;
+  border-left: 1px solid var(--ui-border);
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+}
+
+.link-menu-cut:hover {
+  background: rgb(0 0 0 / 6%);
+  opacity: 1;
+}
+
+.link-menu-cut svg {
+  width: 16px;
+  height: 16px;
+}
+
+.link-menu-empty {
+  margin: 4px 8px 10px;
+  font-size: 13px;
+  color: var(--ui-fg-soft);
+}
+
+.link-menu-add {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ui-accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.link-menu-add:hover {
+  background: rgb(37 99 235 / 8%);
+}
+
+/* ------------------------------------------------------------------ 连线模式 */
+
+/* 目标是"点这里就连上"，十字光标是唯一不占空间的暗示 */
+html[data-linking] .note {
+  cursor: crosshair;
+}
+
+html[data-linking] .note:hover {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * 破坏性入口一律消失（决策 77）：连线途中不能删卡、不能复制、不能新建、
+ * 也进不了废纸篓。shortcuts.ts 只有一个 Esc，没有键盘删除路径，所以隐藏按钮就够了。
+ */
+html[data-linking] .note-delete,
+html[data-linking] .note-copy,
+html[data-linking] .note-grip,
+html[data-linking] .fab,
+html[data-linking] .trash-anchor {
+  display: none;
+}
+
+/* 源便签悬浮卡：fixed，不随视野动，保证"我在连哪张"始终可见 */
+.link-source {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  z-index: var(--z-panel);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  /* 根节点不吃事件：只有卡片和取消按钮自己收 */
+  pointer-events: none;
+}
+
+.link-source[hidden] {
+  display: none;
+}
+
+/* 便签预览 + 取消按钮并排：取消是一枚独立按钮，不挂在卡片角上 */
+.link-source-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/*
+ * 这张卡要**长得跟墙上的便签一样**：同底色、同字号、同圆角、同阴影，正文原样渲染
+ * （图片也照常加载）—— 用户要靠正文认出"我连的是哪张"，一个纯色块认不出。
+ *
+ * 尺寸小一号 + 超长淡出：它是身份标签不是编辑入口，跟着正文长到半屏高就挡住画布了。
+ */
+.link-source-card {
+  position: relative;
+  box-sizing: border-box;
+  width: 240px;
+  min-height: 84px;
+  max-height: 148px;
+  overflow: hidden;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--note-bg, #f9d5e5);
+  color: var(--note-fg, #1f2937);
+  box-shadow:
+    0 1px 2px rgb(17 24 39 / 10%),
+    0 6px 20px rgb(17 24 39 / 8%);
+  font-size: var(--base-font-size, var(--fs-note));
+  line-height: var(--lh-note);
+  overflow-wrap: anywhere;
+  user-select: none;
+  pointer-events: auto;
+}
+
+/* 正文被裁掉时淡出到底色：一眼看出"还有更多"，又不是把整张卡（含纸色）一起虚掉 */
+.link-source-card::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--note-bg, #f9d5e5));
+  pointer-events: none;
+}
+
+/* 独立取消按钮：放卡片右侧，和卡片底部对齐 */
+.link-source-cancel {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-pill);
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg);
+  box-shadow: var(--ui-shadow-1);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.link-source-cancel:hover,
+.link-source-cancel:focus-visible {
+  filter: brightness(0.96);
+}
+
+.link-source-cancel:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.link-source-cancel svg {
+  width: 14px;
+  height: 14px;
+}
+
+.link-source-hint {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-surface-solid);
+  color: var(--ui-fg-soft);
+  font-size: 12px;
+}

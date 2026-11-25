@@ -10,7 +10,7 @@
  */
 
 import { setAria, setText, setTitle, type MessageKey } from '@/i18n';
-import { ICONS, materialIcon } from '@/ui/icons';
+import { ICONS, lineIcon, materialIcon } from '@/ui/icons';
 
 import type { EditorHandle, FormatAction, FormatState } from './editor';
 
@@ -38,13 +38,25 @@ const BUTTONS: BtnSpec[] = [
 
 const isButton = (action: FormatAction | 'link'): action is FormatAction => action !== 'link';
 
+/** 大头针（决策 75）：手绘线描，与格式图标同一网格尺寸 */
+const PIN = [
+  'M12 17v5',
+  'M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 0-2H8a1 1 0 0 0 0 2h1v4.76z',
+];
+
 export interface FormatBar {
   /** 选区/格式变化时由编辑层转发过来 */
   sync(state: FormatState): void;
   dispose(): void;
 }
 
-export function mountFormatBar(card: HTMLElement, handle: EditorHandle): FormatBar {
+export type OpenLinksHandler = (noteId: string, card: HTMLElement) => void;
+
+export function mountFormatBar(
+  card: HTMLElement,
+  handle: EditorHandle,
+  onOpenLinks?: OpenLinksHandler,
+): FormatBar {
   const bar = document.createElement('div');
   bar.className = 'note-format';
   // 画布手势看到它就什么都不做（见 gestures.ts：data-no-pan 早于长按/平移判断）
@@ -65,6 +77,22 @@ export function mountFormatBar(card: HTMLElement, handle: EditorHandle): FormatB
     buttons.set(spec.action, button);
     bar.append(button);
   }
+
+  // 分隔 + 大头针：不是格式操作，是"打开连线列表"，单独一组放末尾。
+  // 无右键的设备靠它进连线（决策 75），与右键菜单完全同一个 popover。
+  const sep = document.createElement('span');
+  sep.className = 'note-format-sep';
+  sep.setAttribute('aria-hidden', 'true');
+
+  const pin = document.createElement('button');
+  pin.type = 'button';
+  pin.className = 'note-format-btn';
+  pin.dataset['linkOpen'] = '';
+  pin.append(lineIcon(PIN));
+  setTitle(pin, 'link.menuOpen');
+  setAria(pin, 'link.menuOpen');
+
+  bar.append(sep, pin);
 
   // 链接输入：不弹 window.prompt（会被浏览器拦、也没法在缩放后的世界里定位）
   const linkForm = document.createElement('form');
@@ -124,6 +152,15 @@ export function mountFormatBar(card: HTMLElement, handle: EditorHandle): FormatB
     // 按钮里现在是内联 SVG：点到的 target 会变成 SVGPathElement，
     // 用 HTMLElement 判断会把"点图标"整条丢掉（点图标边缘才有效，非常难复现）
     if (!(target instanceof Element)) return;
+
+    // 大头针：先于格式动作判断（它没有 data-fmt）
+    if (target.closest('[data-link-open]')) {
+      hideLinkForm();
+      const noteId = card.dataset['noteId'];
+      if (noteId) onOpenLinks?.(noteId, card);
+      return;
+    }
+
     const action = target.closest<HTMLButtonElement>('[data-fmt]')?.dataset['fmt'] as
       | FormatAction
       | 'link'

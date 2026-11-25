@@ -85,6 +85,9 @@ export function attachInteractions(shell: AppShell): () => void {
   };
 
   const onPointerDown = (event: PointerEvent): void => {
+    // 右键的 pointerdown 也走这里：不记下来的话，右键弹完菜单再点空白，
+    // 位移会按"从菜单锚点算起"算成一次拖动，点空白退编辑就失效了（坑 1）
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     downAt = { x: event.clientX, y: event.clientY };
   };
 

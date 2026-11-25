@@ -17,6 +17,11 @@ export interface AppState {
    * 是因为**剔除也要读它**：一张被拖出可见带的卡如果被卸载，用户手里就什么都没了。
    */
   draggingId: string | null;
+  /**
+   * 连线模式的源便签（决策 77）。和 `draggingId` 同级：瞬态、不落库，
+   * 刷新页面天然回到"不在连线"，不需要额外出入口。
+   */
+  linkingFrom: string | null;
 }
 
 /** 只回报"变了什么"，订阅者不必自己 diff 全表 —— 拖动时每帧都会通知 */
@@ -24,7 +29,7 @@ type NotesListener = (upserts: readonly NoteRecord[], removed: readonly string[]
 type StateListener = (state: Readonly<AppState>) => void;
 
 const notes = new Map<string, NoteRecord>();
-const state: AppState = { editingId: null, draggingId: null };
+const state: AppState = { editingId: null, draggingId: null, linkingFrom: null };
 
 const noteListeners = new Set<NotesListener>();
 const stateListeners = new Set<StateListener>();

@@ -3,11 +3,12 @@ import 'fake-indexeddb/auto';
 import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { __resetPrefs, initPrefs, nextZ } from '@/app/prefs';
+import { __resetPrefs, getLinks, initPrefs, nextZ } from '@/app/prefs';
 import { __resetStore, store } from '@/app/store';
 import { buildBundle, parseBundle } from '@/io/bundle';
 import { importLibraryBundle, planImport, sanitizeSettings } from '@/io/importFlow';
 import { serializeNote } from '@/io/frontmatter';
+import { initLinks, linkIndex } from '@/link/state';
 import { DB_NAME, closeDB, migrate, openDB } from '@/storage/db';
 import { FALLBACK_PREFS, repo } from '@/storage/repo';
 import type { AssetRecord, NoteRecord, PrefsRecord } from '@/storage/types';
@@ -75,6 +76,8 @@ beforeEach(async () => {
   __resetStore();
   __resetPrefs();
   initPrefs(FALLBACK_PREFS);
+  // 边集索引是模块级单例：每个用例都从空边集重建，否则上一个用例的线会漏进来
+  initLinks();
 });
 
 afterEach(async () => {
@@ -114,6 +117,23 @@ describe('buildBundle / parseBundle', () => {
       'palette',
       'wheelMode',
     ]);
+  });
+
+  it('links 放 manifest 顶层，只带两端都在包里的边（归一 + 去重 + 剔死边）', async () => {
+    const records = [note('a'), note('b')];
+
+    const parsed = await parseBundle(
+      await buildBundle(records, () => undefined, prefs(), [
+        ['b', 'a'],
+        ['a', 'gone'], // 另一端不在包里：导出后就是死边
+        ['a', 'a'], // 自连不是连接
+        ['a', 'b'], // 重复
+      ]),
+    );
+
+    expect(parsed.manifest?.links).toEqual([['a', 'b']]);
+    // 边不能混进 preferences —— 偏好归偏好、关系归关系
+    expect(parsed.manifest?.preferences).not.toHaveProperty('links');
   });
 
   it('坏 manifest 不毁掉整次导入；.DS_Store 之类静默忽略', async () => {
@@ -201,6 +221,33 @@ describe('planImport（改名与清洗规则）', () => {
     expect(plan.renamedAssets).toBe(1);
     // 引用是"按 id 前缀"重写的：同一个资产换过扩展名也一起改
     expect(plan.notes[0]?.contentMd).toBe('![x](assets/img1-1.png) 和 ![y](assets/img1-1.webp)');
+  });
+
+  it('边按 id 映射重写；映射不到的端点与自连丢弃', () => {
+    const meta = { x: 0, y: 0, width: 260, height: 200, minHeight: 160, z: 1, bgColor: '#fff', createdAt: 1, updatedAt: 1 };
+    const parsed = {
+      notes: [
+        { meta: { ...meta, id: 'a' }, contentMd: '' },
+        { meta: { ...meta, id: 'b' }, contentMd: '' },
+      ],
+      assets: new Map(),
+      manifest: {
+        app: 'sticky-wall' as const,
+        version: 1,
+        exportedAt: 1,
+        links: [
+          ['a', 'b'],
+          ['a', 'ghost'], // 包里没有这张卡：跨包引用
+          ['a', 'a'], // 自连
+        ] as const,
+      },
+      skipped: 0,
+    };
+    // 'a' 撞了已有 id → 改名 a-1，边必须跟着走
+    const plan = planImport({ parsed, existingNoteIds: new Set(['a']), existingAssetIds: new Set() });
+
+    expect(plan.notes.map((n) => n.id)).toEqual(['a-1', 'b']);
+    expect(plan.links).toEqual([['a-1', 'b']]);
   });
 
   it('坏几何被夹进合理区间，坏时间回落到当前时间', () => {
@@ -357,7 +404,39 @@ describe('importLibraryBundle（真库 round-trip）', () => {
     const result = await importLibraryBundle(await zip.generateAsync({ type: 'arraybuffer' }));
 
     expect(result.added).toBe(0);
+    expect(result.addedLinks).toBe(0);
     expect(result.skipped).toBe(1);
     expect(store.count()).toBe(0);
+  });
+
+  it('带连线的包：第二次导入改名后边跟着改，且与本地边集合并去重', async () => {
+    const data = await buildBundle([note('a'), note('b')], () => undefined, prefs(), [['a', 'b']]);
+
+    const first = await importLibraryBundle(data);
+    expect(first.addedLinks).toBe(1);
+    expect(linkIndex().has('a', 'b')).toBe(true);
+
+    const second = await importLibraryBundle(data);
+    expect(second.renamedNotes).toBe(2);
+    // 线指向的是改名后的 a-1 / b-1，不是包里的旧 id
+    expect(linkIndex().has('a-1', 'b-1')).toBe(true);
+    expect(second.addedLinks).toBe(1);
+    expect(linkIndex().size()).toBe(2);
+    // 边集落进了 prefs，下一次 flush 就会写库
+    expect(getLinks()).toEqual([
+      ['a', 'b'],
+      ['a-1', 'b-1'],
+    ]);
+  });
+
+  it('老包没有 manifest.links：本地已有连线原样不动', async () => {
+    const data = await buildBundle([note('a'), note('b')], () => undefined, prefs());
+    initLinks([['keep', 'wire']]);
+
+    const result = await importLibraryBundle(data);
+
+    expect(result.added).toBe(2);
+    expect(result.addedLinks).toBe(0);
+    expect(linkIndex().pairs()).toEqual([['keep', 'wire']]);
   });
 });

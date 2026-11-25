@@ -34,6 +34,14 @@
         <div class="world" id="world">
           <div class="note-layer" id="note-layer"></div>
         </div>
+        <!--
+          连线层（决策 74）：必须留在 .world **之外**，且 z-index: 1。
+          .world 的 will-change 让卡片 z-index 封在自己的层叠上下文里，所以卡片怎么翻都盖不住线。
+          删掉这条层级关系，圆点和线就会被便签吃掉。
+        -->
+        <svg class="link-layer" id="link-layer" aria-hidden="true">
+          <g class="link-view"></g>
+        </svg>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

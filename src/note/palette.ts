@@ -180,6 +180,37 @@ export function textColor(display: string): string {
   return chosen;
 }
 
+/* ---------------------------------------------------------------- 毛线色 */
+
+/** 深色背景（目前只有黑板）：线的色要往上提，往下压就糊进底色里了 */
+const DARK_BACKGROUNDS: ReadonlySet<Background> = new Set<Background>(['blackboard']);
+
+const threadCache = new Map<string, string>();
+
+/**
+ * 连线的端点色 = 卡片显示色"深一档（浅底）/ 亮一档（深底）"。
+ *
+ * 不能复用 `textColor()`：那是"能不能读清"的两档墨色，无论卡片什么颜色都只会回
+ * `#1F2937` 或 `#F8FAFC`，一条线的两端必然同色 —— 渐变还在，但看不出渐变。
+ * 这里保留卡片自己的色相、把饱和度抬一点、明度往"在底色上看得见"的方向推一档：
+ * 两端色相不同线才有渐变，且任何材质下都不会糊掉。
+ */
+export function threadColor(display: string, bg: Background = 'paper'): string {
+  const key = `${bg}:${display}`;
+  const hit = threadCache.get(key);
+  if (hit) return hit;
+
+  const { h, s, l } = hexToHsl(display);
+  const sat = clamp(s + 10, 0, 96);
+  // 浅底上压到中途（l≈26–50 才够对比又不发黑），深底上抬到 50 以上
+  const value = DARK_BACKGROUNDS.has(bg)
+    ? hslToHex(h, sat, clamp(l + 34, 50, 78))
+    : hslToHex(h, sat, clamp(l * 0.5, 26, 50));
+
+  threadCache.set(key, value);
+  return value;
+}
+
 /* -------------------------------------------------------------- 自动取色 */
 
 /** 统计半径（世界单位）。400 大约是一屏 1 倍缩放时看得见的范围 */
@@ -238,4 +269,5 @@ export function pickColor({ poolId, notes, cx, cy, id }: PickColorOpts): string 
 export function __resetPaletteCache(): void {
   displayCache.clear();
   textCache.clear();
+  threadCache.clear();
 }

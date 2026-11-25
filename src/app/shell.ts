@@ -9,6 +9,8 @@ export interface AppShell {
   viewport: HTMLElement;
   world: HTMLElement;
   noteLayer: HTMLElement;
+  /** 连线叠加层：必须是 #viewport 的直接子元素（层序前提见 layers.css / link.css） */
+  linkLayer: SVGSVGElement;
 }
 
 const REQUIRED = {
@@ -16,6 +18,7 @@ const REQUIRED = {
   viewport: '#viewport',
   world: '#world',
   noteLayer: '#note-layer',
+  linkLayer: '#link-layer',
 } as const;
 
 function must<T extends Element>(doc: ParentNode, selector: string): T {
@@ -30,5 +33,6 @@ export function queryShell(doc: Document = document): AppShell {
     viewport: must<HTMLElement>(doc, REQUIRED.viewport),
     world: must<HTMLElement>(doc, REQUIRED.world),
     noteLayer: must<HTMLElement>(doc, REQUIRED.noteLayer),
+    linkLayer: must<SVGSVGElement>(doc, REQUIRED.linkLayer),
   };
 }

@@ -31,6 +31,15 @@ export const ZH = {
   'note.trash': '移入废纸篓',
   'note.copy': '复制为图片',
 
+  /* ---------------------------------------------------------------- 连线 */
+  'link.menuTitle': '已连线（{n}）',
+  'link.menuEmpty': '还没有连线',
+  'link.menuAdd': '添加连线',
+  'link.menuDisconnect': '断开连线',
+  'link.menuOpen': '连线列表',
+  'link.modeHint': '点击目标便签即可连线',
+  'link.modeExit': '退出连线模式',
+
   /* ---------------------------------------------------------------- 格式条 */
   'fmt.toolbar': '文本格式',
   'fmt.bold': '粗体（⌘/Ctrl+B）',
@@ -123,6 +132,7 @@ export const ZH = {
   'io.summaryAdded': '新增 {n} 张便签。',
   'io.summaryRenamed': '其中 {n} 张因 id 重复，已改名 -1 保存。',
   'io.summaryAssetsRenamed': '图片同步改名 {n} 张，正文引用已重写。',
+  'io.summaryLinks': '恢复 {n} 条连线。',
   'io.summaryNoSettings': '包里没有外观设置，当前主题保持不变。',
   'io.summaryApplied': '偏好：已应用包内的背景与配色。',
   'io.summaryKept': '偏好：保持当前外观。',
@@ -218,6 +228,15 @@ export const EN: Record<MessageKey, string> = {
   'note.trash': 'Move to trash',
   'note.copy': 'Copy as image',
 
+  /* ---------------------------------------------------------------- links */
+  'link.menuTitle': 'Linked ({n})',
+  'link.menuEmpty': 'No links yet',
+  'link.menuAdd': 'Add link',
+  'link.menuDisconnect': 'Disconnect',
+  'link.menuOpen': 'Links',
+  'link.modeHint': 'Tap a note to connect',
+  'link.modeExit': 'Exit link mode',
+
   'fmt.toolbar': 'Text formatting',
   'fmt.bold': 'Bold (⌘/Ctrl+B)',
   'fmt.italic': 'Italic (⌘/Ctrl+I)',
@@ -305,6 +324,7 @@ export const EN: Record<MessageKey, string> = {
   'io.summaryAdded': 'Added {n} notes.',
   'io.summaryRenamed': '{n} of them had duplicate ids and were saved with a -1 suffix.',
   'io.summaryAssetsRenamed': '{n} images were renamed too, and their references rewritten.',
+  'io.summaryLinks': 'Restored {n} links.',
   'io.summaryNoSettings': 'The bundle has no appearance settings, so the theme is unchanged.',
   'io.summaryApplied': "Preferences: applied the bundle's background and palette.",
   'io.summaryKept': 'Preferences: kept the current look.',

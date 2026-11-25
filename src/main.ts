@@ -2,6 +2,7 @@ import './styles/reset.css';
 import './styles/tokens.css';
 import './styles/layers.css';
 import './styles/note.css';
+import './styles/link.css';
 import './styles/ui.css';
 
 import { commands } from '@/app/commands';
@@ -23,6 +24,7 @@ import { attachInteractions } from '@/canvas/interactions';
 import { attachImageDrop } from '@/note/imageNote';
 import { attachNoteLayer, repaintMountedNotes } from '@/canvas/noteLayer';
 import { attachRender, paint } from '@/canvas/render';
+import { scheduleFrame } from '@/canvas/rAF';
 import { fitAll, onChange, restoreViewport, toWorld, viewportSize } from '@/canvas/viewport';
 import { t } from '@/i18n';
 import { parseBundle } from '@/io/bundle';
@@ -34,7 +36,11 @@ import {
   sanitizeSettings,
 } from '@/io/importFlow';
 import { exportWallPng } from '@/io/png';
-import { getEditingId, startEditing, stopEditing } from '@/note/editing';
+import { mountLinkMenu } from '@/link/menu';
+import { attachLinking, startLinking } from '@/link/mode';
+import { attachLinkPaint } from '@/link/paint';
+import { initLinks } from '@/link/state';
+import { getEditingId, setLinkOpener, startEditing, stopEditing } from '@/note/editing';
 import { registerServiceWorker, requestPersistentStorage } from '@/pwa';
 import { migrate, openDB } from '@/storage/db';
 import { FALLBACK_PREFS, repo } from '@/storage/repo';
@@ -114,6 +120,8 @@ async function boot(): Promise<void> {
           settings: rememberSettings(),
           viewport: getPrefs().lastViewport,
           counters: { zCounter: getPrefs().zCounter },
+          // 边集跟着偏好一起落库（同一批 flush），不另开一条写链
+          links: getPrefs().links,
         }),
     },
     {
@@ -159,8 +167,19 @@ async function boot(): Promise<void> {
   restoreViewport(getPrefs().lastViewport, store.getNotes().values());
 
   attachRender(shell);
+  // 边集索引必须在第一帧之前建好：paint 首帧就会读它，晚一步会先出现"没有线"的一帧
+  initLinks();
+  attachLinkPaint(shell);
   attachGestures(shell.viewport); // wheelMode 由手势层实时读 prefs，不传快照
   attachNoteLayer(shell); // 卡片落地 + 视口剔除；必须排在 attachRender 之后（剔除要读新视野）
+  attachLinking(shell); // 连线模式的输入隔离：capture 阶段，先于 interactions 的委托
+  // 右键与大头针共用这一个 popover；"添加连线"交给 mode，菜单不知道模式怎么实现
+  const linkMenu = mountLinkMenu(shell, { onAdd: startLinking });
+  // 大头针锚点用便签屏幕矩形的中心（编辑态卡片就在视口里，rect 最准）
+  setLinkOpener((noteId, card) => {
+    const rect = card.getBoundingClientRect();
+    linkMenu.open(noteId, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+  });
   attachInteractions(shell);
   // 拖图 / 非编辑态粘贴 → 直接建图片便签（编辑中的情况由编辑器自己接）
   attachImageDrop(shell);
@@ -183,6 +202,8 @@ async function boot(): Promise<void> {
       // 网格的对齐变量只在 grid 材质下写（`paint` 里的早退）。切**进** grid 时必须补一帧，
       // 否则格子停在切走时的老位置，直到用户再拖一下才对齐。
       paint(shell);
+      // 线的颜色是从便签色派生的，换背景/调色板后也要重画（paint 只写 world，不管叠加层）
+      scheduleFrame();
     }
     controls?.sync();
   }

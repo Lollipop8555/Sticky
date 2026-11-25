@@ -11,9 +11,17 @@
  */
 
 import { t } from '@/i18n';
+import { normalizeLinks } from '@/link/links';
 import { collectAssetIds } from '@/trash/trash';
 import { serializeNote, parseNote, type NoteMeta } from '@/io/frontmatter';
-import type { AssetRecord, NoteRecord, PrefsRecord, SettingsRecord, ViewportRecord } from '@/storage/types';
+import type {
+  AssetRecord,
+  LinkPair,
+  NoteRecord,
+  PrefsRecord,
+  SettingsRecord,
+  ViewportRecord,
+} from '@/storage/types';
 
 export const BUNDLE_VERSION = 1;
 
@@ -54,6 +62,11 @@ export interface BundleManifest {
   preferences?: Partial<SettingsRecord>;
   lastViewport?: ViewportRecord;
   assets?: BundleAssetMeta[];
+  /**
+   * 边集放**顶层**而不是 `preferences` 里：偏好归偏好、关系归关系（决策 76）。
+   * 可选字段，旧版读到直接忽略，所以 `BUNDLE_VERSION` 不用升。
+   */
+  links?: readonly LinkPair[];
 }
 
 export interface ParsedAsset {
@@ -97,6 +110,8 @@ export async function buildBundle(
   prefs: Pick<PrefsRecord, 'background' | 'palette' | 'defaultNoteWidth' | 'baseFontSize' | 'wheelMode' | 'createMode'> & {
     lastViewport: ViewportRecord;
   },
+  /** 边集单独传：它不是"偏好"，不该被卷进 manifest.preferences */
+  links: readonly LinkPair[] = [],
 ): Promise<Blob> {
   const JSZip = await loadJSZip();
   const zip = new JSZip();
@@ -122,6 +137,11 @@ export async function buildBundle(
     zip.file(`${ASSET_DIR}${id}.${asset.ext}`, asset.blob, { compression: 'STORE' });
   }
 
+  // 导出的是"墙上"的卡（软删的不在 notes 里）：它们参与的边打包出去就是死边，一并剔掉。
+  // 本机边集不动 —— 回收站恢复后线还在，这里只是不把跨库失效引用带出去。
+  const exportedIds = new Set(notes.map((note) => note.id));
+  const manifestLinks = normalizeLinks(links).filter(([a, b]) => exportedIds.has(a) && exportedIds.has(b));
+
   const manifest: BundleManifest = {
     app: 'sticky-wall',
     version: BUNDLE_VERSION,
@@ -137,6 +157,7 @@ export async function buildBundle(
     },
     lastViewport: prefs.lastViewport,
     assets: index,
+    links: manifestLinks,
   };
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
@@ -177,6 +198,8 @@ export async function parseBundle(data: Blob | ArrayBuffer): Promise<ParsedBundl
   if (manifest && typeof manifest.version === 'number' && manifest.version > BUNDLE_VERSION) {
     console.warn(`[bundle] 包版本 ${manifest.version} 高于本机 ${BUNDLE_VERSION}，尽力导入`);
   }
+  // links 是包里的不可信输入：坏形状就地洗成合法边集，下游（planImport）只剩映射与去重
+  if (manifest) manifest.links = normalizeLinks(manifest.links);
   const metaById = new Map<string, BundleAssetMeta>();
   for (const meta of manifest?.assets ?? []) {
     if (meta && typeof meta.id === 'string') metaById.set(meta.id, meta);

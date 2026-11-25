@@ -23,6 +23,9 @@ export function attachShortcuts(doc: Document = document): () => void {
     // 1. dialog 在自己手里：浏览器会派发 cancel 并关闭它，这里再动编辑态就是"一次 Esc 关两样"
     if (doc.querySelector('dialog[open]')) return;
 
+    // 1b. 连线列表 popover 同理：它有自己的一份 Esc 处理（关菜单、保留编辑态）
+    if (doc.querySelector('[data-link-menu]:not([hidden])')) return;
+
     // 2. 拖拽：手势层持有 endDrag 闭包，由它负责把坐标退回原位
     if (store.getState().draggingId !== null) return;
 

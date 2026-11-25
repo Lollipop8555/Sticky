@@ -28,6 +28,12 @@ export interface NoteRecord {
   deletedAt: number | null;
 }
 
+/**
+ * 连线：全局无向 id 对（决策 73）。约定 `a < b` 排序归一，`a|b` 即唯一键。
+ * 不放进 NoteRecord —— 两边各存一份就会有"A 说连着、B 说没连"的裂缝。
+ */
+export type LinkPair = readonly [string, string];
+
 export interface AssetRecord {
   /** uuid v4 = 文件名主体，contentMd 里以 assets/<id>.<ext> 引用 */
   id: string;
@@ -68,10 +74,15 @@ export interface ViewportRecord {
   scale: number;
 }
 
-/** 内存里的完整偏好：库中拆成 settings / viewport / counters 三行，读出来合并成一个对象 */
+/** 内存里的完整偏好：库中拆成 settings / viewport / counters / links 四行，读出来合并成一个对象 */
 export interface PrefsRecord extends SettingsRecord {
   lastViewport: ViewportRecord;
   zCounter: number;
+  /**
+   * 全局边集（决策 73）。**故意不放进 SettingsRecord**：
+   * `updatePrefs()` 那种"改偏好"的入口不该顺手改到连接关系，只留专门的读写口。
+   */
+  links: LinkPair[];
   schemaVersion: number;
 }
 
@@ -79,7 +90,12 @@ export interface PrefsRecord extends SettingsRecord {
 export type PrefsRow =
   | { key: 'settings'; value: SettingsRecord }
   | { key: 'viewport'; value: ViewportRecord }
-  | { key: 'counters'; value: { zCounter: number } };
+  | { key: 'counters'; value: { zCounter: number } }
+  /**
+   * 老库没有这一行 —— 不种它、不升 SCHEMA_VERSION：IDB 只有 bump 版本才会走
+   * `onupgradeneeded`，为一行键值数据升版本反而要写迁移。读不到就是空边集。
+   */
+  | { key: 'links'; value: LinkPair[] };
 
 export const DEFAULT_SETTINGS: SettingsRecord = {
   background: 'paper',
@@ -102,6 +118,7 @@ export const DEFAULT_PREFS: PrefsRecord = {
   ...DEFAULT_SETTINGS,
   lastViewport: { ...DEFAULT_VIEWPORT },
   zCounter: 0,
+  links: [],
   schemaVersion: 1,
 };
 

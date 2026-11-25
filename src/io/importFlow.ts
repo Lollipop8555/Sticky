@@ -17,9 +17,11 @@ import { fitAll } from '@/canvas/viewport';
 import { t } from '@/i18n';
 import { downloadBlob } from '@/io/clipboard';
 import { buildBundle, BundleTooLargeError, parseBundle, type ParsedBundle } from '@/io/bundle';
+import { normalizeLinks, normalizePair } from '@/link/links';
+import { mergeLinks } from '@/link/state';
 import { getEditingId, stopEditing } from '@/note/editing';
 import { repo } from '@/storage/repo';
-import type { AssetRecord, NoteRecord, SettingsRecord } from '@/storage/types';
+import type { AssetRecord, LinkPair, NoteRecord, SettingsRecord } from '@/storage/types';
 import { flush } from '@/storage/writeQueue';
 import { toast } from '@/ui/toast';
 
@@ -82,6 +84,8 @@ export interface ImportPlan {
   /** 待写入的记录（id 已改名、资产引用已重写） */
   notes: NoteRecord[];
   assets: PlannedAsset[];
+  /** 包内的边，端点已按改名映射重写；映射不到或自连的已丢弃 */
+  links: LinkPair[];
   renamedNotes: number;
   renamedAssets: number;
   /** 解析失败被丢弃的 md 数量 */
@@ -154,12 +158,15 @@ export function planImport(input: PlanInput): ImportPlan {
   }
 
   const notes: NoteRecord[] = [];
+  const idMap = new Map<string, string>();
   let renamedNotes = 0;
 
   for (const { meta, contentMd } of parsed.notes) {
     const base = safeId(meta.id);
     const { name, renamed } = claimName(base, takenNotes);
     if (renamed) renamedNotes += 1;
+    // 边是按包里的原始 id 写的，所以映射的 key 也必须是原始 id
+    if (!idMap.has(meta.id)) idMap.set(meta.id, name);
 
     const minHeight = clampNumber(meta.minHeight, HEIGHT_MIN, WIDTH_MAX, 160);
     const height = Math.max(minHeight, clampNumber(meta.height, HEIGHT_MIN, HEIGHT_MAX, minHeight));
@@ -181,7 +188,19 @@ export function planImport(input: PlanInput): ImportPlan {
     });
   }
 
-  return { notes, assets, renamedNotes, renamedAssets, skipped: parsed.skipped };
+  // 边必须在拿到 id 映射**之后**重写：先合边再改名，线就指向了不存在的 id（坑 7）。
+  // 任一端映射不到 = 跨包引用 / 包里的那张卡解析失败 → 直接丢弃，不留半截边。
+  const links: LinkPair[] = [];
+  for (const [oldA, oldB] of normalizeLinks(parsed.manifest?.links)) {
+    const a = idMap.get(oldA);
+    const b = idMap.get(oldB);
+    if (!a || !b) continue;
+    // 两张同 id 的卡各自改名后可能撞成同一个新 id，自连同样丢弃
+    const pair = normalizePair(a, b);
+    if (pair) links.push(pair);
+  }
+
+  return { notes, assets, links: normalizeLinks(links), renamedNotes, renamedAssets, skipped: parsed.skipped };
 }
 
 /* ------------------------------------------------------------------ 偏好清洗 */
@@ -244,7 +263,8 @@ export async function exportLibraryBundle(): Promise<boolean> {
     // 资产一次全读：按 id 逐张 get 会开 N 个事务，整库几百张图时明显更慢
     const assets = new Map((await repo.loadAssetsAll()).map((asset) => [asset.id, asset]));
     const prefs = getPrefs();
-    const blob = await buildBundle(notes, (id) => assets.get(id), prefs);
+    // 边集单独传：buildBundle 会再剔一遍"两端都在导出的卡里"才留下
+    const blob = await buildBundle(notes, (id) => assets.get(id), prefs, prefs.links);
     downloadBlob(blob, `${t('file.wall')}-${today()}.zip`);
     toast(t('toast.exported', { n: notes.length }));
     return true;
@@ -276,6 +296,8 @@ export interface ImportOptions {
 
 export interface ImportResult {
   added: number;
+  /** 与本地边集合并后，真正新增的连线条数（重复的包不会加两次） */
+  addedLinks: number;
   renamedNotes: number;
   renamedAssets: number;
   skipped: number;
@@ -337,6 +359,7 @@ export async function importLibraryBundle(
   if (plan.notes.length === 0) {
     return {
       added: 0,
+      addedLinks: 0,
       renamedNotes: 0,
       renamedAssets: plan.renamedAssets,
       skipped: plan.skipped,
@@ -369,6 +392,8 @@ export async function importLibraryBundle(
   store.commit(plan.notes);
   // zCounter 必须抬到导入数据的最大 z 之上，否则"置于顶层"会给出一张比所有卡都低的 z
   for (const note of plan.notes) setZCounter(note.z);
+  // 边在记录之后合：paint 首帧读到的两端都已经是真卡，不会先画一帧"悬空线"
+  const addedLinks = mergeLinks(plan.links);
 
   let preferencesApplied = false;
   if (settings && options.applyPreferences && options.onPrefs) {
@@ -381,6 +406,7 @@ export async function importLibraryBundle(
 
   return {
     added: plan.notes.length,
+    addedLinks,
     renamedNotes: plan.renamedNotes,
     renamedAssets: plan.renamedAssets,
     skipped: plan.skipped,

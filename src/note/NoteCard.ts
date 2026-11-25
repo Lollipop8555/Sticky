@@ -21,14 +21,23 @@ export function getNoteBody(el: HTMLElement): HTMLElement | null {
   return el.querySelector<HTMLElement>(`[${BODY_ATTR}]`);
 }
 
+/**
+ * 正文容器。抽出来是给"卡片以外的便签样式副本"用（连线模式的源便签预览）：
+ * `renderNoteBody` 认的是 `[data-note-body]` 这个标记，属性名只该有一个来源。
+ */
+export function createNoteBody(): HTMLElement {
+  const body = document.createElement('div');
+  body.className = 'note-body';
+  body.setAttribute(BODY_ATTR, '');
+  return body;
+}
+
 export function createNoteEl(n: NoteRecord): HTMLElement {
   const el = document.createElement('article');
   el.className = 'note';
   el.dataset['noteId'] = n.id;
 
-  const body = document.createElement('div');
-  body.className = 'note-body';
-  body.setAttribute(BODY_ATTR, '');
+  const body = createNoteBody();
 
   const placeholder = document.createElement('div');
   placeholder.className = 'note-placeholder';

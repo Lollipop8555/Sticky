@@ -16,6 +16,7 @@
 import { commands } from '@/app/commands';
 import { getPrefs } from '@/app/prefs';
 import { store } from '@/app/store';
+import { getLinkingFrom } from '@/link/mode';
 import { getEditingId, stopEditing } from '@/note/editing';
 import { flush } from '@/storage/writeQueue';
 
@@ -168,6 +169,8 @@ export function attachGestures(
   }
 
   function startPress(el: HTMLElement, id: string, pointerId: number): void {
+    // 连线模式禁拖卡（决策 77）：移动端手指一停就过 400ms，卡片会被拿走，永远点不中目标
+    if (getLinkingFrom()) return;
     clearPress();
     const delay = getPrefs().mobileMode ? LONG_PRESS_MOBILE : LONG_PRESS_DESKTOP;
     press = {
@@ -183,6 +186,8 @@ export function attachGestures(
   }
 
   function beginDrag(id: string, el: HTMLElement, pointerId: number): void {
+    // 长按计时器可能在"进入连线模式"之前就点着了，到点再挡一次
+    if (getLinkingFrom()) return;
     const note = store.getNote(id);
     if (!note) return;
 

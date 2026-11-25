@@ -15,7 +15,7 @@ async function booted(page: Page, path = './'): Promise<void> {
   await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
 }
 
-test('首次打开：库里建好三行偏好与两个表', async ({ page }) => {
+test('首次打开：库里建好四行偏好与两个表', async ({ page }) => {
   await booted(page);
 
   const shape = await page.evaluate(async () => {
@@ -36,8 +36,9 @@ test('首次打开：库里建好三行偏好与两个表', async ({ page }) => 
   });
 
   expect(shape.stores).toEqual(['assets', 'notes', 'prefs']);
-  // 空行也补齐：以后排查"设置没生效"时，能直接在 DevTools 看到真实存了什么
-  expect(shape.rows).toEqual(['counters', 'settings', 'viewport']);
+  // 空行也补齐：以后排查"设置没生效"时，能直接在 DevTools 看到真实存了什么。
+  // links 是连线边集（决策 75）：单独一行，空库也要有，老库读不到就等于空边集
+  expect(shape.rows).toEqual(['counters', 'links', 'settings', 'viewport']);
 });
 
 test('库里的背景与字号在刷新后生效（读 → 应用主题）', async ({ page }) => {
