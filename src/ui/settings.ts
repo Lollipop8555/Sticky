@@ -23,6 +23,7 @@ import {
 } from '@/i18n';
 import { BACKGROUND_LABEL_KEYS, BACKGROUNDS, PALETTE_IDS, PALETTE_LABEL_KEYS } from '@/app/theme';
 import type { PrefsRecord, SettingsRecord } from '@/storage/types';
+import { lineIcon } from '@/ui/icons';
 
 export interface SettingsOptions {
   getPrefs(): Readonly<PrefsRecord>;
@@ -137,8 +138,14 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   const head = el(doc, 'header', 'sheet-head');
   const title = txt(doc, 'h2', 'sheet-title', 'settings.title');
   title.id = 'settings-title';
-  const close = el(doc, 'button', 'sheet-close', '×');
+  /*
+   * 关闭按钮是线描叉，不是字形 `×`：字形的墨迹位置由字体决定（SF 里 × 坐在数学轴上，
+   * 不在行盒中心），28px 圆底看着就"没托住"它，hover 一上色尤其明显。
+   * 画法与卡片右上角的删除按钮一致，14px 盒子里墨迹满幅。
+   */
+  const close = el(doc, 'button', 'sheet-close');
   close.type = 'button';
+  close.append(lineIcon(['M3 3l18 18', 'M21 3 3 21'], 1.7));
   setAria(close, 'settings.close');
   setTitle(close, 'settings.close');
   head.append(title, close);
@@ -223,6 +230,7 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
     'settings.helpTip6',
     'settings.helpTip7',
     'settings.helpTip8',
+    'settings.helpTip9',
   ];
   for (const key of tips) help.append(txt(doc, 'li', '', key));
   const version = el(doc, 'p', 'help-version');

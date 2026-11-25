@@ -272,6 +272,9 @@
 }
 
 .sheet-close {
+  /* 圆形底就是 hover 的那块阴影，图标必须和它在几何上同心：用 grid 居中，不靠字形的行盒 */
+  display: grid;
+  place-items: center;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -279,9 +282,14 @@
   border-radius: 50%;
   background: transparent;
   color: var(--ui-fg-soft);
-  font-size: 18px;
-  line-height: 1;
   cursor: pointer;
+}
+
+/* 14px 的线描叉：与卡片右上角的删除按钮同一画法（决策 87），墨迹满幅 */
+.sheet-close > svg {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .sheet-close:hover {

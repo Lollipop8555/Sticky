@@ -54,3 +54,7 @@ http://127.0.0.1:4173/Sticky/?reset=1
 如果有其它标签页或已安装的窗口还开着，删除会被挡住，页面会提示先关掉它们。
 
 DevTools 的 `Application → Storage → Clear site data` 也能用，但同样要**清完立刻刷新**，别让页面停留。
+
+## 许可
+
+[MIT](./LICENSE) © 2026 Sticky Wall contributors。当前版本 **1.0.0**，显示在设置面板底部的「帮助」里。

@@ -98,3 +98,20 @@ test('切语言只翻界面：已有便签正文一个字都不动', async ({ pa
   // 正文是用户数据，不是界面文案：翻译它就是改用户的字
   await expect(page.locator('.note-body')).toHaveText(contentMd);
 });
+
+test('帮助：说明齐全，版本行带 1.0.0 与 MIT 协议，切语言跟着换', async ({ page }) => {
+  await boot(page);
+  await openSettings(page);
+
+  const help = page.locator('.sheet-settings .sheet-help');
+  // 两种复制各占一条：只提"复制为图片"会让人以为贴到 Word 里只能是一张图
+  await expect(help.locator('.help-list li')).toHaveCount(9);
+  await expect(help.locator('.help-list')).toContainText('复制为图片');
+  await expect(help.locator('.help-list')).toContainText('复制为文本');
+
+  await expect(help.locator('.help-version')).toHaveText('版本 1.0.0 · MIT 协议');
+
+  await pick(page, 'English');
+  await expect(help.locator('.help-list li')).toHaveCount(9);
+  await expect(help.locator('.help-version')).toHaveText('Version 1.0.0 · MIT license');
+});

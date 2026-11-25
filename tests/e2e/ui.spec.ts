@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { noteRecord, seedDB } from './helpers';
 
@@ -161,6 +161,36 @@ test('Esc 优先级：面板打开时只关面板，不动编辑态；再按一�
 
   await page.keyboard.press('Escape');
   await expect(page.locator('.note.is-editing')).toHaveCount(0);
+});
+
+test('面板的关闭叉是线描图标，在 hover 圆底里几何居中', async ({ page }) => {
+  await boot(page);
+
+  // 字形 `×` 的墨迹位置随字体漂（上一版 hover 时能看出图标偏上），所以必须是 svg 且没有文本
+  async function checkCentered(close: Locator): Promise<void> {
+    await expect(close.locator('svg')).toHaveCount(1);
+    await expect(close).toHaveText('');
+    const offset = await close.evaluate((el) => {
+      const btn = el.getBoundingClientRect();
+      const icon = el.querySelector('svg')!.getBoundingClientRect();
+      return {
+        dx: Math.abs(btn.x + btn.width / 2 - (icon.x + icon.width / 2)),
+        dy: Math.abs(btn.y + btn.height / 2 - (icon.y + icon.height / 2)),
+      };
+    });
+    expect(offset.dx).toBeLessThan(0.5);
+    expect(offset.dy).toBeLessThan(0.5);
+  }
+
+  await page.locator('.ctl[data-act="settings"]').click();
+  await expect(page.locator('.sheet-settings')).toBeVisible();
+  await checkCentered(page.locator('.sheet-settings .sheet-close'));
+  await page.locator('.sheet-settings .sheet-close').click();
+  await expect(page.locator('.sheet-settings')).toBeHidden();
+
+  await page.locator('.trash-anchor').click();
+  await expect(page.locator('.sheet-trash')).toBeVisible();
+  await checkCentered(page.locator('.sheet-trash .sheet-close'));
 });
 
 test.describe('触屏设备', () => {

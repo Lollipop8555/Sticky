@@ -93,8 +93,9 @@ export const ZH = {
   'settings.helpTip5': '删除：卡片右上角 × 移入废纸篓，3 秒内可撤销',
   'settings.helpTip6': '废纸篓（左下）：恢复便签；按住「清空」3 秒才真的清空',
   'settings.helpTip7': '拖入或粘贴图片：建一张图片便签；单击图片看大图',
-  'settings.helpTip8': '复制：卡片右上角复制按钮把便签变成图片放进剪贴板',
-  'settings.version': '版本 {v}',
+  'settings.helpTip8': '复制为图片：卡片右上角的图片按钮，把便签变成 PNG 放进剪贴板',
+  'settings.helpTip9': '复制为文本：右上角文字按钮，粘到 Word / WPS / 飞书里保留粗体、列表与图片',
+  'settings.version': '版本 {v} · MIT 协议',
 
   /* ---------------------------------------------------------------- 背景 / 配色 */
   'bg.paper': '纸白',
@@ -292,8 +293,10 @@ export const EN: Record<MessageKey, string> = {
   'settings.helpTip5': 'Delete: the × on a note moves it to the trash, undoable for 3 seconds',
   'settings.helpTip6': 'Trash (bottom left): restore notes; hold "Empty" for 3 seconds to really empty it',
   'settings.helpTip7': 'Drop or paste an image to create an image note; click an image to enlarge',
-  'settings.helpTip8': 'Copy: the copy button turns a note into an image on your clipboard',
-  'settings.version': 'Version {v}',
+  'settings.helpTip8': 'Copy as image: the image button turns a note into a PNG on your clipboard',
+  'settings.helpTip9':
+    'Copy as text: the text button keeps bold, lists and images when pasted into Word, WPS or Feishu',
+  'settings.version': 'Version {v} · MIT license',
 
   'bg.paper': 'Paper',
   'bg.kraft': 'Kraft',

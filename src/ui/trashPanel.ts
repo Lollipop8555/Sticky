@@ -17,6 +17,7 @@ import { onLocaleChange, setAria, setText, t } from '@/i18n';
 import type { NoteRecord } from '@/storage/types';
 import { relativeTime, trashSummary } from '@/trash/summary';
 import { emptyTrash, listTrash, restoreNote } from '@/trash/trash';
+import { lineIcon } from '@/ui/icons';
 import { toast } from '@/ui/toast';
 
 export interface TrashPanel {
@@ -56,8 +57,10 @@ export function mountTrashPanel(doc: Document = document): TrashPanel {
   title.id = 'trash-title';
   const count = el(doc, 'span', 'trash-count');
   count.setAttribute('aria-live', 'polite');
-  const close = el(doc, 'button', 'sheet-close', '×');
+  // 同设置面板：线描叉，不用字形 ×（字形墨迹在行盒里不居中，圆底托不住）
+  const close = el(doc, 'button', 'sheet-close');
   close.type = 'button';
+  close.append(lineIcon(['M3 3l18 18', 'M21 3 3 21'], 1.7));
   setAria(close, 'trash.close');
   head.append(title, count, close);
 
