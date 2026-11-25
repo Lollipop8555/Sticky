@@ -74,6 +74,9 @@ export const repo = {
       onboarded: typeof s.onboarded === 'boolean' ? s.onboarded : true,
       // 老库没有 lang：默认中文，不跟着浏览器语言走（用户没在设置里选过，就不该突然变英文）
       lang: isLocale(s.lang) ? s.lang : DEFAULT_SETTINGS.lang,
+      // 逐字段收紧：`...s` 只保证"有"，不保证类型对（手工改过的行、早期版本的坏数据）
+      watermarkOn: s.watermarkOn === true,
+      watermarkText: typeof s.watermarkText === 'string' ? s.watermarkText.slice(0, 40) : '',
       lastViewport: { ...DEFAULT_VIEWPORT, ...v },
       zCounter: Number.isFinite(c?.zCounter) ? c.zCounter : 0,
       // 逐条校验：库里可能躺着早期版本的坏数据或手工改过的行

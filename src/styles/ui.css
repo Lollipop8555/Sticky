@@ -40,7 +40,7 @@
   border: 0;
   border-radius: 50%;
   background: var(--ui-accent);
-  color: #fff;
+  color: var(--ui-on-accent);
   box-shadow: var(--ui-shadow-2);
   cursor: pointer;
   display: grid;
@@ -364,7 +364,44 @@
   margin-top: 12px;
 }
 
+/* 面板里唯一的自由输入（水印文字）：边框/圆角跟分段控件同一套，别让面板出现两种输入观感 */
+.field-text {
+  display: block;
+  margin-top: 12px;
+}
+
+.text-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.text-input::placeholder {
+  color: var(--ui-fg-soft);
+}
+
+/*
+ * 移动模式下 16px 起：iOS Safari 对小于 16px 的输入框一聚焦就整页放大，
+ * 而这一放大不会自己还原，用户得手动缩回去。桌面 13px 够用，所以只在触屏放宽。
+ */
+[data-mobile='1'] .text-input {
+  font-size: 16px;
+}
+
+.text-input:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
 .field-legend {
+  /* 水印那一行用 span 当标签（不是 fieldset 的 legend），inline 元素的 margin 不生效会贴着输入框 */
+  display: block;
   padding: 0;
   margin-bottom: 6px;
   font-size: 12px;
@@ -408,8 +445,17 @@
 
 .opt:has(input:checked) {
   background: var(--ui-accent);
-  color: #fff;
+  color: var(--ui-on-accent);
   box-shadow: var(--ui-shadow-1);
+}
+
+/*
+ * 勾选行整行变 accent 底之后，说明文字还是 `--ui-fg-soft`（灰）——
+ * 灰压在 #2563eb 上只有 1.1:1，等于消失。
+ * 直接换成选中前景色（5.2:1），主次靠 11px/13px 的字号差，不靠降低对比度
+ */
+.opt:has(input:checked) .opt-hint {
+  color: var(--ui-on-accent);
 }
 
 .opt:has(input:checked):hover {
@@ -436,6 +482,16 @@
 
 .opt-row:hover {
   background: transparent;
+}
+
+/*
+ * 选中行悬停时必须保住强调色底：上面那条和无条件的 `:hover` 都改过写法，
+ * 但 `:not(:has(input:checked))` 在本项目的 Chromium 里没能把选中项排除掉，
+ * 白字会直接压在白面板上。改成更靠后、特异性更高的显式规则，不依赖 `:not(:has())`
+ */
+.opt-row:has(input:checked),
+.opt-row:has(input:checked):hover {
+  background: var(--ui-accent);
 }
 
 .opt-row input {
@@ -491,7 +547,7 @@
 .btn-primary {
   border-color: transparent;
   background: var(--ui-accent);
-  color: #fff;
+  color: var(--ui-on-accent);
 }
 
 .btn-primary:hover:not([disabled]) {

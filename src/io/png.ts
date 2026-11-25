@@ -9,11 +9,15 @@
  *    首屏包不该为一个月用一次的功能付 30KB。
  */
 
+import { getPrefs } from '@/app/prefs';
 import { store } from '@/app/store';
+import { activeBackground, CANVAS_THEME_COLOR } from '@/app/theme';
 import { settleImages } from '@/assets/inline';
 import { t } from '@/i18n';
 import { copyPngWhenReady, downloadBlob, safeFileName } from '@/io/clipboard';
+import { appendWatermark } from '@/io/watermark';
 import { createNoteEl, renderNoteBody } from '@/note/NoteCard';
+import { displayColor, textColor } from '@/note/palette';
 import { trashSummary } from '@/trash/summary';
 import type { NoteRecord } from '@/storage/types';
 import { toast } from '@/ui/toast';
@@ -30,6 +34,16 @@ interface Staged {
   width: number;
   height: number;
   dispose: () => void;
+}
+
+/**
+ * 水印文案（决策 88）：关着就返回 null，调用方据此决定铺不铺。
+ * 开关打开但文字空着，回落到应用名 —— 否则"开了水印却什么都没出现"更像坏了。
+ */
+function watermarkText(): string | null {
+  const prefs = getPrefs();
+  if (!prefs.watermarkOn) return null;
+  return prefs.watermarkText.trim() || t('watermark.fallback');
 }
 
 /** 离屏舞台：卡片必须在文档里才有布局（getBoundingClientRect / 字体 / CSS 变量才生效） */
@@ -70,6 +84,16 @@ async function stageNote(note: NoteRecord): Promise<Staged & { blob: () => Promi
   // 出图尺寸取实测：md 渲染出来的内容高度才是"这张卡真实的长相"
   const width = Math.max(60, Math.ceil(el.offsetWidth) || note.width);
   const height = Math.max(60, Math.ceil(el.offsetHeight) || note.height);
+
+  // 水印叠在卡内最上层（z-index 2 > 格式条的 1）：单卡图就是这张卡，圆角外不该有字
+  const mark = watermarkText();
+  if (mark) {
+    appendWatermark(
+      el,
+      { text: mark, width, height, ink: textColor(displayColor(note.bgColor, activeBackground())) },
+      2,
+    );
+  }
 
   return {
     node: el,
@@ -149,6 +173,23 @@ export async function exportWallPng(): Promise<void> {
     // 背景色跟着当前主题走：深色主题下导出白底拼贴图会很刺眼
     const background = getComputedStyle(document.body).backgroundColor || '#f7f5f1';
     const scale = Math.min(PIXEL_RATIO, MAX_SIDE / Math.max(contentWidth, contentHeight));
+
+    // 整墙图一刀切地铺满：墨色按"画布背景"算（卡片颜色各异，跟着单卡会花），
+    // z-index 必须压过所有卡片的内联 z（最大几千），不能指望 DOM 顺序
+    const mark = watermarkText();
+    if (mark) {
+      const maxZ = notes.reduce((top, n) => Math.max(top, n.z), 0);
+      appendWatermark(
+        wall,
+        {
+          text: mark,
+          width: contentWidth,
+          height: contentHeight,
+          ink: textColor(CANVAS_THEME_COLOR[activeBackground()]),
+        },
+        maxZ + 1,
+      );
+    }
     const blob = await snapshot(wall, contentWidth, contentHeight, scale, background);
     downloadBlob(blob, `${t('file.wall')}-${new Date().toISOString().slice(0, 10)}.png`);
     toast(t('toast.exported', { n: notes.length }));

@@ -42,6 +42,11 @@
   --noise-src: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='140'%20height='140'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.85'%20numOctaves='4'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='140'%20height='140'%20filter='url(%23n)'/%3E%3C/svg%3E");
 
   --ui-accent: #2563eb;
+  /*
+   * 压在 accent 上的前景色。别写死 #fff：黑板上 accent 是浅蓝 #7aa2f7，
+   * 白字只有 2.5:1，跟"看不清的灰字"是同一类问题
+   */
+  --ui-on-accent: #fff;
   --ui-shadow-1: 0 1px 2px rgb(17 24 39 / 10%);
   --ui-shadow-2: 0 8px 28px rgb(17 24 39 / 14%);
   color-scheme: light;
@@ -118,6 +123,7 @@
   --ui-surface-solid: #232725;
   --ui-border: rgb(255 255 255 / 12%);
   --ui-accent: #7aa2f7;
+  --ui-on-accent: #10141c;
   --ui-shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
   --ui-shadow-2: 0 8px 28px rgb(0 0 0 / 55%);
   color-scheme: dark;

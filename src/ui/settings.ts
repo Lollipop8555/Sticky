@@ -192,6 +192,36 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   mobileRow.append(mobileInput, mobileText);
   feel.append(mobileRow);
 
+  // ---- 分享图片（决策 88）----
+  // 放在"数据"之前：它管的是产出物长什么样，而不是库本身
+  const share = section(doc, 'settings.share');
+  const wmRow = el(doc, 'label', 'opt opt-row');
+  const wmToggle = el(doc, 'input');
+  wmToggle.type = 'checkbox';
+  wmToggle.dataset['field'] = 'watermarkOn';
+  const wmText = el(doc, 'span', 'opt-text');
+  wmText.append(
+    txt(doc, 'span', '', 'settings.watermark'),
+    txt(doc, 'small', 'opt-hint', 'settings.watermarkHint'),
+  );
+  wmRow.append(wmToggle, wmText);
+
+  /*
+   * 面板里的第一个文本输入。为什么不用 `fieldset` + `legend`：
+   * 视觉上它就是一行标签加一条输入框，和上面的分段控件不是一类东西；
+   * `maxlength` 卡在 40，和仓库里别的"用户可见的短文本"（文件名）保持同一个上限。
+   */
+  const wmField = el(doc, 'label', 'field field-text');
+  wmField.append(txt(doc, 'span', 'field-legend', 'settings.watermarkText'));
+  const wmInput = el(doc, 'input', 'text-input');
+  wmInput.type = 'text';
+  wmInput.dataset['field'] = 'watermarkText';
+  wmInput.maxLength = 40;
+  wmInput.autocomplete = 'off';
+  wmInput.spellcheck = false;
+  wmField.append(wmInput);
+  share.append(wmRow, wmField);
+
   // ---- 数据 ----
   const data = section(doc, 'settings.data');
   const usage = el(doc, 'p', 'usage');
@@ -236,7 +266,7 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   const version = el(doc, 'p', 'help-version');
   details.append(help, version);
 
-  body.append(language, look, feel, data, details);
+  body.append(language, look, feel, share, data, details);
   dialog.append(head, body);
   doc.body.append(dialog);
 
@@ -258,8 +288,14 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
     version.textContent = t('settings.version', { v: __APP_VERSION__ });
   }
 
+  /** placeholder 不是静态指纹（applyLocale 只管 textContent/title/aria），切语言得自己重写 */
+  function paintWatermark(): void {
+    wmInput.placeholder = t('settings.watermarkPlaceholder');
+  }
+
   paintUsage();
   paintVersion();
+  paintWatermark();
 
   function refresh(): void {
     const prefs = options.getPrefs();
@@ -267,7 +303,8 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
       const field = input.dataset['field'] as keyof SettingsRecord | undefined;
       if (!field) continue;
       const value = prefs[field];
-      input.checked = input.type === 'checkbox' ? value === true : value === input.value;
+      if (input.type === 'text') input.value = typeof value === 'string' ? value : '';
+      else input.checked = input.type === 'checkbox' ? value === true : value === input.value;
     }
   }
 
@@ -296,11 +333,24 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
     const input = event.target as HTMLInputElement | null;
     const field = input?.dataset['field'] as keyof SettingsRecord | undefined;
     if (!input || !field) return;
+    // 文本框走 input（每个字符即时落库），change 只在 blur 时来一次，别在这里重复写
+    if (input.type === 'text') return;
     const patch: Partial<SettingsRecord> =
       input.type === 'checkbox'
         ? ({ [field]: input.checked } as Partial<SettingsRecord>)
         : ({ [field]: input.value } as Partial<SettingsRecord>);
     options.onPrefs(patch);
+  });
+
+  /*
+   * 文本框：`input` 而不是 `change` —— 用户可能输完直接关面板（不 blur 不触发 change），
+   * 那样文字就丢了。落库由 writeQueue 的 400ms 节流兜住，不必自己防抖。
+   */
+  dialog.addEventListener('input', (event) => {
+    const input = event.target as HTMLInputElement | null;
+    if (input?.dataset['field'] !== 'watermarkText') return;
+    // maxlength 只在用户键入时生效，粘贴/IME 上屏仍可能超长，这里再截一次
+    options.onPrefs({ watermarkText: input.value.slice(0, 40) });
   });
 
   // 点遮罩关闭：命中 dialog 本体（而不是 body 里任何子元素）才算点到外面
@@ -313,6 +363,7 @@ export function mountSettings(options: SettingsOptions, doc: Document = document
   onLocaleChange(() => {
     paintUsage();
     paintVersion();
+    paintWatermark();
   });
 
   return {

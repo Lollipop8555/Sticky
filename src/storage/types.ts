@@ -55,6 +55,10 @@ export interface SettingsRecord {
   wheelMode: 'pan' | 'zoom';
   createMode: 'dblclick' | 'fab';
   mobileMode: boolean;
+  /** 导出的图片是否叠水印（决策 88）。屏幕上的便签墙永远不画它 */
+  watermarkOn: boolean;
+  /** 水印文字；空串表示"用默认文案"。存**用户原话**，不翻译（语言只翻界面） */
+  watermarkText: string;
   mobilePromptSeen: boolean;
   /**
    * 首访的示例便签是否已经放过（决策 65）。
@@ -106,6 +110,9 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   wheelMode: 'pan',
   createMode: 'dblclick',
   mobileMode: false,
+  // 默认关：没跟用户打过招呼就往他的分享图里加字，是替他做决定
+  watermarkOn: false,
+  watermarkText: '',
   mobilePromptSeen: false,
   // 默认 false：全新库里该由 boot 放进那张示例便签。老库由 migrate / loadPrefs 兜成 true
   onboarded: false,

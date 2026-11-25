@@ -89,8 +89,10 @@ test('移动兼容模式的说明排在标题下方，说明再长也不撑破�
   await boot(page);
   await openSettings(page);
 
-  const title = (await page.locator('.opt-row .opt-text > span').boundingBox())!;
-  const hint = (await page.locator('.opt-row .opt-hint').boundingBox())!;
+  // 面板里不止一行 opt-row（水印那行也是），按字段名定位到移动兼容模式这一行
+  const row = '.opt-row:has(input[data-field="mobileMode"])';
+  const title = (await page.locator(`${row} .opt-text > span`).boundingBox())!;
+  const hint = (await page.locator(`${row} .opt-hint`).boundingBox())!;
 
   // 两行：说明在标题**下方**，且左对齐同一列（不是 `margin-left:auto` 顶到行尾）
   expect(hint.y).toBeGreaterThanOrEqual(title.y + title.height - 0.5);
@@ -109,7 +111,73 @@ test('移动兼容模式的说明排在标题下方，说明再长也不撑破�
   expect(await overflow()).toEqual({ sheet: 0, body: 0 });
 
   // 复选框不能被长文案压扁
-  expect((await page.locator('.opt-row input').boundingBox())?.width).toBeCloseTo(16, 0);
+  expect((await page.locator(`${row} input`).boundingBox())?.width).toBeCloseTo(16, 0);
+});
+
+test('勾选行的说明在强调色底上仍然读得清（浅色与黑板）', async ({ page }) => {
+  await boot(page);
+  await openSettings(page);
+
+  /**
+   * 量说明文字与它所在行的 WCAG 对比度。
+   * 勾选后整行铺 `--ui-accent`，说明原本是 `--ui-fg-soft`（灰）—— 灰配蓝只有 1.1:1，
+   * 等于看不出来。这个数直接卡 AA 的 4.5:1，以后谁调色都会被它拦住。
+   */
+  async function hintLook(field: string): Promise<{ ratio: number; bgAlpha: number }> {
+    return page.evaluate((name) => {
+      const row = document.querySelector<HTMLElement>(`.opt-row:has(input[data-field="${name}"])`);
+      const hint = row?.querySelector<HTMLElement>('.opt-hint');
+      if (!row || !hint) throw new Error(`没找到 ${name} 那一行`);
+
+      const parse = (css: string): [number, number, number, number] => {
+        const n = (css.match(/[\d.]+/g) ?? []).map(Number);
+        return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1];
+      };
+      const lum = (rgb: [number, number, number, number]): number => {
+        const ch = (c: number): number => {
+          const v = c / 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * ch(rgb[0]) + 0.7152 * ch(rgb[1]) + 0.0722 * ch(rgb[2]);
+      };
+
+      const fg = parse(getComputedStyle(hint).color);
+      const bg = parse(getComputedStyle(row).backgroundColor);
+      const sorted = [lum(fg), lum(bg)].sort((a, b) => b - a);
+      return {
+        ratio: ((sorted[0] ?? 0) + 0.05) / ((sorted[1] ?? 0) + 0.05),
+        bgAlpha: bg[3],
+      };
+    }, field);
+  }
+
+  for (const background of ['paper', 'blackboard']) {
+    await page.locator(`.opt:has(input[data-field="background"][value="${background}"])`).click();
+    await expect(page.locator('html')).toHaveAttribute('data-background', background);
+
+    // 两行都是"复选框 + 说明"的结构，都会整行铺强调色，都得过
+    for (const field of ['mobileMode', 'watermarkOn']) {
+      const row = page.locator(`.opt-row:has(input[data-field="${field}"])`);
+      await row.click();
+      await expect(row.locator('input')).toBeChecked();
+
+      /*
+       * 悬停时也必须保住底色：`.opt-row:hover { background: transparent }` 如果不排除选中态，
+       * 会把整行强调底抹掉，白色说明直接压在白面板上（比灰字压蓝底更糟）。
+       * 底色有 120ms 过渡，先等它落定再量。
+       */
+      await expect.poll(async () => (await hintLook(field)).bgAlpha).toBeGreaterThan(0.5);
+      expect((await hintLook(field)).ratio).toBeGreaterThanOrEqual(4.5);
+
+      // 鼠标移开（用户真实看到的状态）
+      await page.mouse.move(0, 0);
+      await expect.poll(async () => (await hintLook(field)).bgAlpha).toBeGreaterThan(0.5);
+      expect((await hintLook(field)).ratio).toBeGreaterThanOrEqual(4.5);
+
+      await row.click();
+      await expect(row.locator('input')).not.toBeChecked();
+    }
+  }
 });
 
 test('移动模式：控件放大、手柄常驻，且落库', async ({ page }) => {
@@ -122,7 +190,7 @@ test('移动模式：控件放大、手柄常驻，且落库', async ({ page }) 
   )).toBe(0);
 
   await openSettings(page);
-  await page.locator('.opt-row').click();
+  await page.locator('.opt-row:has(input[data-field="mobileMode"])').click();
   await expect(page.locator('html')).toHaveAttribute('data-mobile', '1');
 
   expect((await ctl.boundingBox())?.width).toBeCloseTo(40, 0);
