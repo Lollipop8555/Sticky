@@ -14,6 +14,12 @@
   top: 0;
   left: 0;
   /*
+   * 纵向 flex：为了把尾签（决策 90）**按在卡片底部**。
+   * 尾签是 `margin-top: auto`，内容撑不满 `--min-h` 时它吸到卡底（真实便签的签尾），
+   * 内容撑满/超长时 auto 归零，它自然接在正文后面。
+   * 卡片里其余子元素（手柄、删除、复制）都是 absolute，不参与这条流。
+   */
+  /*
    * 位置用独立的 `translate` 属性，而不是 `transform: translate(...)`。
    *
    * 一是 translate 与 left/top 相比走合成、不触发重排；
@@ -35,6 +41,8 @@
     0 6px 20px rgb(17 24 39 / 8%);
   font-size: var(--base-font-size, var(--fs-note));
   line-height: var(--lh-note);
+  display: flex;
+  flex-direction: column;
   /* 长串英文/URL 不该把卡片撑破：宁可断词也不能横向溢出 */
   overflow-wrap: anywhere;
   /* 静息态不选中：否则长按浮起时会把半张卡的文字一起拖蓝（编辑态在 .note-body 里恢复） */
@@ -46,6 +54,19 @@
    * 仍由 UA 给出 I 形。
    */
   cursor: default;
+}
+
+/*
+ * 静息正文与编辑器的盒模型对齐（决策 68/70）。
+ *
+ * `.note` 改成纵向 flex 之后，`.note-body` 成了 flex item：子元素的外边距不再"穿出"它的下边，
+ * 而编辑态里多一层的 `.note-editor` 仍是普通块，列表的上下外边距还能穿出去。
+ * 结果就是同一张卡进出编辑差一个列表外边距（实测 11px，"进出一编辑高度不变"直接破）。
+ * 两边都 `flow-root`：各自把子元素的外边距收进自己的盒子，两条路量出来就一样高。
+ */
+.note-body,
+.note-editor {
+  display: flow-root;
 }
 
 .note-body p {
@@ -183,6 +204,11 @@
  * 编辑态 Tiptap 接管的是正文，尾签既不可编辑也不会被绕过去删掉；
  * `renderNoteBody` 重画正文时也碰不到它。
  *
+ * `margin-top: auto` 把它按在**卡片底部**（真实便签的签尾），
+ * 而不是紧跟着最后一行字 —— 只有内容把卡撑满时 auto 才会归零，
+ * 那时它自然接在正文后面。间距固定给 `padding-top`：auto 在"贴着正文"时
+ * 是 0，光靠它会和最后一行字黏在一起。
+ *
  * 墨色直接用 `--note-fg`：那是 `applyNoteColors` 按卡片底色挑好的文本色，
  * 便签换颜色（含换背景后的派生色）尾签自己就跟着变，不需要另算一套。
  */
@@ -190,7 +216,11 @@
   display: flex;
   align-items: center;
   gap: 0.6em;
-  margin-top: 0.8em;
+  /* 贴底；auto 在内容撑满时归零，两种情况都要有 0.8em 的行距 */
+  margin-top: auto;
+  padding-top: 0.8em;
+  /* 自己不参与伸缩：卡片被 LOD 定高时不该把尾签压扁 */
+  flex: 0 0 auto;
   font-size: 0.78em;
   line-height: 1.4;
   color: var(--note-fg, #1f2937);

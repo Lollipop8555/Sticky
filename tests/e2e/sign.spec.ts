@@ -244,6 +244,69 @@ test('几何：两条线等长、文字夹在正中；长文字换行时线不�
   expect(Math.min(long.leftWidth, long.rightWidth)).toBeGreaterThanOrEqual(long.fontPx * 2.4);
 });
 
+test('贴底：内容不满一卡时按在卡底，撑满时接在正文后', async ({ page }) => {
+  await boot(page);
+  await turnOnSign(page, '阿洛');
+
+  /**
+   * 两组数字缺一不可：
+   * - `gapToBottom` 小 → 确实在卡底（不是跟着最后一行字跑）；
+   * - `textToSign` 大 → 正文短的时候中间是空的；
+   * 反过来（长内容）`textToSign` 收到一行行距、`cardHeight` 超过 `--min-h`。
+   * 只测前者会漏掉"内容一多就压住正文"，只测后者会漏掉这次的 bug。
+   */
+  const measure = () =>
+    page.evaluate(() => {
+      const card = document.querySelector<HTMLElement>('.note');
+      if (!card) throw new Error('没找到便签');
+      const body = card.querySelector<HTMLElement>('.note-body');
+      const sign = card.querySelector<HTMLElement>('.note-sign');
+      if (!body || !sign) throw new Error('缺少正文或尾签');
+
+      const cb = card.getBoundingClientRect();
+      const bb = body.getBoundingClientRect();
+      const sb = sign.getBoundingClientRect();
+      const style = getComputedStyle(card);
+
+      return {
+        cardHeight: cb.height,
+        // 这张卡的 `--min-h`：内容不满时卡高应该正好等于它
+        minH: parseFloat(style.minHeight),
+        padBottom: parseFloat(style.paddingBottom),
+        // 尾签底边到卡底的距离：贴底时 ≈ 下内边距
+        gapToBottom: cb.bottom - sb.bottom,
+        // 正文底边到尾签顶边：内容装不满时是一大片空白，撑满时只剩一行行距
+        textToSign: sb.top - bb.bottom,
+      };
+    });
+
+  const short = await measure();
+  // 内容只有一行：卡高被 `min-height` 兜住，尾签应该已经沉到底部
+  expect(Math.abs(short.cardHeight - short.minH)).toBeLessThanOrEqual(1);
+  expect(short.gapToBottom).toBeLessThanOrEqual(short.padBottom + 1);
+  expect(short.textToSign).toBeGreaterThan(40);
+
+  // 换一张长卡：正文自己把卡撑高，尾签跟着到最后一行下面，不是浮在半空
+  await seedDB(page, {
+    notes: [
+      noteRecord('n1', {
+        x: 40,
+        y: 40,
+        contentMd: Array.from({ length: 12 }, (_, i) => `第 ${i + 1} 段`).join('\n\n'),
+      }),
+    ],
+  });
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-booted', 'true');
+  await expect(page.locator('.note-sign')).toBeVisible();
+
+  const long = await measure();
+  expect(long.cardHeight).toBeGreaterThan(short.cardHeight);
+  expect(long.gapToBottom).toBeLessThanOrEqual(long.padBottom + 1);
+  // 紧接正文：`margin-top: auto` 在这里归零，那 0.8em 的间距是尾签自己的 padding-top
+  expect(Math.abs(long.textToSign)).toBeLessThanOrEqual(1);
+});
+
 test('编辑态：尾签还在屏幕上，但不进编辑器内容', async ({ page }) => {
   await boot(page);
   await turnOnSign(page, '阿洛');
