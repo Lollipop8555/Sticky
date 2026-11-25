@@ -40,6 +40,8 @@ export const ZH = {
   'link.menuOpen': '连线列表',
   'link.modeHint': '点击目标便签即可连线',
   'link.modeExit': '退出连线模式',
+  'link.modeDone': '完成连线，退出模式',
+  'io.done': '完成',
 
   /* ---------------------------------------------------------------- 格式条 */
   'fmt.toolbar': '文本格式',
@@ -255,6 +257,8 @@ export const EN: Record<MessageKey, string> = {
   'link.menuOpen': 'Links',
   'link.modeHint': 'Tap a note to connect',
   'link.modeExit': 'Exit link mode',
+  'link.modeDone': 'Finish linking and exit',
+  'io.done': 'Done',
 
   'fmt.toolbar': 'Text formatting',
   'fmt.bold': 'Bold (⌘/Ctrl+B)',

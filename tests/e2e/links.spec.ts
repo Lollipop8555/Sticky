@@ -83,35 +83,27 @@ test('右键 → 添加连线 → 点目标连上；重复点不叠加；Esc 与
   await menu(page).locator('.link-menu-add').click();
 
   await expect(page.locator('html')).toHaveAttribute('data-linking', 'true');
-  const source = page.locator('.link-source');
-  await expect(source).toBeVisible();
+  const hud = page.locator('.link-hud');
+  await expect(hud).toBeVisible();
 
-  // 底部预览必须是**便签**：同底色 + 真正的正文容器（不是一块纯色）
-  const preview = page.locator('.link-source-card');
-  await expect(preview).toContainText('源便签');
-  await expect(preview.locator('.note-body')).toBeVisible();
-  // "便签样式"的核心是同一条配色派生链：预览底色 === 墙上那张卡的底色
-  const bg = (sel: string) =>
-    page.locator(sel).evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(await bg('.link-source-card')).toBe(await bg('.note[data-note-id="a"]'));
+  // 底部只有"完成"，没有预览卡：源便签的身份由墙上那张卡承担
+  const done = page.locator('.link-hud-done');
+  await expect(done).toBeVisible();
+  await expect(done).toHaveText('完成');
+  await expect(page.locator('.link-source-card')).toHaveCount(0);
 
-  // 取消是一枚独立按钮（在卡片右侧），不是压在卡角上的角标
-  const cancel = page.locator('.link-source-cancel');
-  await expect(cancel).toBeVisible();
-  await expect(cancel).toHaveText('取消');
-  const [cardBox, cancelBox] = await Promise.all([
-    preview.boundingBox(),
-    cancel.boundingBox(),
-  ]);
-  expect(cardBox).not.toBeNull();
-  expect(cancelBox).not.toBeNull();
-  expect(cancelBox!.x).toBeGreaterThanOrEqual(cardBox!.x + cardBox!.width);
-
-  // 源便签在墙上藏起来：它就在原地，点它就是"自己连自己"
-  await expect(page.locator('.note[data-note-id="a"]')).toBeHidden();
+  // 源便签留在原位、灰化发光，不再"消失"
+  const sourceNote = page.locator('.note[data-note-id="a"]');
+  await expect(sourceNote).toBeVisible();
+  await expect(sourceNote).toHaveClass(/note--link-source/);
   // 连线途中不能删卡、不能进废纸篓
   await expect(page.locator('.note[data-note-id="b"] .note-delete')).toBeHidden();
   await expect(page.locator('.trash-anchor')).toBeHidden();
+
+  // 点源便签自己：无反应，不退出模式也不加边
+  await sourceNote.click();
+  await expect(page.locator('html')).toHaveAttribute('data-linking', 'true');
+  await expect(path(page)).toHaveCount(0);
 
   await page.locator('.note[data-note-id="b"]').click();
   await expect(path(page)).toHaveCount(1);
@@ -122,18 +114,19 @@ test('右键 → 添加连线 → 点目标连上；重复点不叠加；Esc 与
 
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).not.toHaveAttribute('data-linking', 'true');
-  await expect(source).toBeHidden();
-  // 退出模式把源便签放回墙上，也不影响已经连上的线
-  await expect(page.locator('.note[data-note-id="a"]')).toBeVisible();
+  await expect(hud).toBeHidden();
+  // 退出模式清掉灰化标记，也不影响已经连上的线
+  await expect(sourceNote).toBeVisible();
+  await expect(sourceNote).not.toHaveClass(/note--link-source/);
   await expect(path(page)).toHaveCount(1);
 
-  // 再进一次，点"取消"退出
+  // 再进一次，点"完成"退出
   await openMenuVia(page, 'a');
   await menu(page).locator('.link-menu-add').click();
   await expect(page.locator('html')).toHaveAttribute('data-linking', 'true');
-  await cancel.click();
+  await done.click();
   await expect(page.locator('html')).not.toHaveAttribute('data-linking', 'true');
-  await expect(page.locator('.note[data-note-id="a"]')).toBeVisible();
+  await expect(sourceNote).toBeVisible();
 
   // 再进一次，点空白退出
   await openMenuVia(page, 'a');
@@ -141,6 +134,37 @@ test('右键 → 添加连线 → 点目标连上；重复点不叠加；Esc 与
   await expect(page.locator('html')).toHaveAttribute('data-linking', 'true');
   await page.mouse.click(1120, 700);
   await expect(page.locator('html')).not.toHaveAttribute('data-linking', 'true');
+});
+
+test('源便签离屏：边缘方位指引出现，回到屏内立即消失', async ({ page }) => {
+  await openWall(page);
+  await openMenuVia(page, 'a');
+  await menu(page).locator('.link-menu-add').click();
+
+  const compass = page.locator('.link-compass');
+  await expect(compass).not.toHaveClass(/is-visible/);
+
+  // 把画布往左拖，源便签 a 被推到屏幕外
+  await page.mouse.move(1000, 400);
+  await page.mouse.down();
+  await page.mouse.move(200, 400, { steps: 12 });
+  await page.mouse.up();
+
+  // 200ms 迟滞 + 150ms 淡入
+  await expect(compass).toHaveClass(/is-visible/, { timeout: 1000 });
+  await expect(compass).toBeVisible();
+  const edgeX = await compass.evaluate((el) => parseFloat((el as HTMLElement).style.left));
+  expect(edgeX).toBeGreaterThanOrEqual(40);
+  expect(edgeX).toBeLessThanOrEqual(80);
+  // 仍在模式里：拖画布不是"点空白退出"
+  await expect(page.locator('html')).toHaveAttribute('data-linking', 'true');
+
+  // 拖回来，回屏立即收起（不等迟滞）
+  await page.mouse.move(200, 400);
+  await page.mouse.down();
+  await page.mouse.move(1000, 400, { steps: 12 });
+  await page.mouse.up();
+  await expect(compass).not.toHaveClass(/is-visible/);
 });
 
 test('大头针开列表 → 跳转：先退出编辑、scale 不变、目标居中', async ({ page }) => {

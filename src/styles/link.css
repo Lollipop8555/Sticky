@@ -164,9 +164,26 @@ html[data-linking] .note {
   cursor: crosshair;
 }
 
-html[data-linking] .note:hover {
+/* hover = 焦点且可连；源便签不可点，不参与这条暗示 */
+html[data-linking] .note:hover:not(.note--link-source) {
   outline: 2px solid var(--ui-accent);
   outline-offset: 2px;
+}
+
+/*
+ * 源便签：留在原位、轻微褪色 + 同色发光。
+ * 不用 z-index 抬高：record.z 是持久化的，CSS 硬提会造出两套层级真相（note.css 的既有决策）。
+ *
+ * saturate 降到 0.4：降 60% 饱和度才看得出"这张不操作"；降到 0 再叠加压暗才会近黑。
+ * 不加 brightness：压暗是"变黑"的元凶，只褪色不压亮度，深红仍是红调而不是黑灰。
+ * 发光取 --note-bg（派生后的显示色，与卡面一致）：drop-shadow 的参数不受前面
+ * saturate 影响，所以光晕保留原色；两层叠加让浅色卡也有可见的边光。
+ */
+html[data-linking] .note--link-source {
+  cursor: default;
+  filter:
+    saturate(0.4) drop-shadow(0 0 2px var(--note-bg, #f9d5e5))
+    drop-shadow(0 0 16px color-mix(in srgb, var(--note-bg, #f9d5e5) 65%, transparent));
 }
 
 /*
@@ -182,107 +199,117 @@ html[data-linking] .trash-anchor {
   display: none;
 }
 
-/* 源便签悬浮卡：fixed，不随视野动，保证"我在连哪张"始终可见 */
-.link-source {
+/* ---------------------------------------------------------------- HUD */
+
+/* 底部栏：只有"完成"和一行提示，源便签的身份由墙上那张灰化卡承担 */
+.link-hud {
   position: fixed;
   left: 50%;
-  bottom: 96px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
   z-index: var(--z-panel);
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 8px;
   transform: translateX(-50%);
-  /* 根节点不吃事件：只有卡片和取消按钮自己收 */
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-fast) var(--ease),
+    visibility var(--dur-fast) var(--ease);
 }
 
-.link-source[hidden] {
-  display: none;
+.link-hud[data-active='true'] {
+  opacity: 1;
+  visibility: visible;
 }
 
-/* 便签预览 + 取消按钮并排：取消是一枚独立按钮，不挂在卡片角上 */
-.link-source-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-/*
- * 这张卡要**长得跟墙上的便签一样**：同底色、同字号、同圆角、同阴影，正文原样渲染
- * （图片也照常加载）—— 用户要靠正文认出"我连的是哪张"，一个纯色块认不出。
- *
- * 尺寸小一号 + 超长淡出：它是身份标签不是编辑入口，跟着正文长到半屏高就挡住画布了。
- */
-.link-source-card {
-  position: relative;
-  box-sizing: border-box;
-  width: 240px;
-  min-height: 84px;
-  max-height: 148px;
-  overflow: hidden;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  background: var(--note-bg, #f9d5e5);
-  color: var(--note-fg, #1f2937);
-  box-shadow:
-    0 1px 2px rgb(17 24 39 / 10%),
-    0 6px 20px rgb(17 24 39 / 8%);
-  font-size: var(--base-font-size, var(--fs-note));
-  line-height: var(--lh-note);
-  overflow-wrap: anywhere;
-  user-select: none;
-  pointer-events: auto;
-}
-
-/* 正文被裁掉时淡出到底色：一眼看出"还有更多"，又不是把整张卡（含纸色）一起虚掉 */
-.link-source-card::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0;
-  height: 28px;
-  background: linear-gradient(to bottom, transparent, var(--note-bg, #f9d5e5));
-  pointer-events: none;
-}
-
-/* 独立取消按钮：放卡片右侧，和卡片底部对齐 */
-.link-source-cancel {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--radius-pill);
-  background: var(--ui-surface-solid);
-  color: var(--ui-fg);
-  box-shadow: var(--ui-shadow-1);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.link-source-cancel:hover,
-.link-source-cancel:focus-visible {
-  filter: brightness(0.96);
-}
-
-.link-source-cancel:focus-visible {
-  outline: 2px solid var(--ui-accent);
-  outline-offset: 2px;
-}
-
-.link-source-cancel svg {
-  width: 14px;
-  height: 14px;
-}
-
-.link-source-hint {
+.link-hud-hint {
   margin: 0;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   background: var(--ui-surface-solid);
   color: var(--ui-fg-soft);
   font-size: 12px;
+}
+
+.link-hud-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ui-accent);
+  color: var(--ui-on-accent);
+  box-shadow: var(--ui-shadow-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.link-hud-done:hover,
+.link-hud-done:focus-visible {
+  filter: brightness(1.08);
+}
+
+.link-hud-done:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.link-hud-done svg {
+  width: 16px;
+  height: 16px;
+}
+
+/*
+ * 离屏方位指引：贴屏幕边缘（内缩 56px 避开左右下角控件），箭头指方向、圆点认卡。
+ * 两层状态：data-active = 在连线模式里；is-visible = 源便签离屏（延迟 200ms 加上）。
+ */
+.link-compass {
+  position: fixed;
+  z-index: var(--z-panel);
+  width: 56px;
+  height: 56px;
+  translate: -50% -50%;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 150ms var(--ease),
+    visibility 150ms var(--ease);
+}
+
+.link-compass[data-active='true'].is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.link-compass-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  margin: -11px;
+  border: 2px solid var(--ui-surface-solid);
+  border-radius: 50%;
+  background: var(--note-bg, #f9d5e5);
+  box-shadow: 0 2px 8px rgb(17 24 39 / 28%);
+}
+
+.link-compass-arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -6px;
+  border-right: 6px solid transparent;
+  border-bottom: 12px solid var(--ui-accent);
+  border-left: 6px solid transparent;
+  transform: rotate(var(--angle, 0deg)) translateY(-24px);
 }

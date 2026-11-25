@@ -8,6 +8,10 @@
  *   2. 点击目标便签 = 加一条边，连完**留在模式里**继续连；
  *   3. 隐藏所有破坏性入口（删除/复制/新建/废纸篓）。
  *
+ * 源便签留在原位、灰化并发光（`.note--link-source`），不再藏起来：
+ * 既不会出现"便签凭空消失"，也不需要按坐标补一刀"点在源卡上别退出"。
+ * 它离屏后由 HUD 的方位指引接手。
+ *
  * 全部监听都注册一次、内部判断模式 —— 比进出模式时反复 add/remove 少一类"忘了摘"的 bug。
  */
 
@@ -15,10 +19,9 @@ import type { AppShell } from '@/app/shell';
 import { store } from '@/app/store';
 import { getMountedNoteEl } from '@/canvas/noteLayer';
 import { onFrame } from '@/canvas/rAF';
-import { get as getViewport } from '@/canvas/viewport';
 import { getEditingId, stopEditing } from '@/note/editing';
 
-import { mountSourceCard, type SourceCard } from './sourceCard';
+import { mountLinkHud, type LinkHud } from './hud';
 import { addLink } from './state';
 
 /** 与 interactions / lightbox 同一口径：手抖几像素不算"点了空白" */
@@ -26,38 +29,24 @@ const CLICK_SLOP = 4;
 
 let doc: Document = document;
 let win: Window = window;
-let card: SourceCard | null = null;
+let hud: LinkHud | null = null;
 let down: { x: number; y: number } | null = null;
 let lastW = 0;
 let lastH = 0;
-/** 被藏起来的源便签元素 + 它原来的 visibility，退出时逐字还原 */
-let hidden: { el: HTMLElement; prev: string } | null = null;
 
 export function getLinkingFrom(): string | null {
   return store.getState().linkingFrom;
 }
 
-/**
- * 把源便签从墙上藏起来。
- *
- * 它就摆在原地、还看得见，就一定有人去点它 —— 而点自己是最没意义的一次连线
- * （`normalizePair` 会丢掉自连，用户看到的就是"点了没反应"）。底部那张预览卡已经
- * 说明"我在连哪张"，墙上那份留着只会制造误触。
- *
- * 每帧兜一次而不是只设一次行内样式：剔除会销毁并重建卡片元素，一次性写法会丢。
- */
-function hideSource(id: string): void {
-  const el = getMountedNoteEl(id);
-  if (!el || hidden?.el === el) return;
-  restoreSource();
-  hidden = { el, prev: el.style.visibility };
-  el.style.visibility = 'hidden';
+/** 标记/还原源便签。剔除会重建卡片元素，所以每帧补一次 class（一次性写法会丢）。 */
+function markSource(id: string): void {
+  getMountedNoteEl(id)?.classList.add('note--link-source');
 }
 
-function restoreSource(): void {
-  if (!hidden) return;
-  hidden.el.style.visibility = hidden.prev;
-  hidden = null;
+function clearSourceMark(): void {
+  for (const el of doc.querySelectorAll('.note--link-source')) {
+    el.classList.remove('note--link-source');
+  }
 }
 
 export function startLinking(noteId: string): void {
@@ -70,16 +59,16 @@ export function startLinking(noteId: string): void {
   doc.documentElement.setAttribute('data-linking', 'true');
   lastW = win.innerWidth;
   lastH = win.innerHeight;
-  card?.show(note);
-  hideSource(noteId);
+  hud?.show(note);
+  markSource(noteId);
 }
 
 export function exitLinking(): void {
   if (!store.getState().linkingFrom) return;
   store.setState({ linkingFrom: null });
   doc.documentElement.removeAttribute('data-linking');
-  card?.hide();
-  restoreSource();
+  hud?.hide();
+  clearSourceMark();
 }
 
 function onCardClick(event: MouseEvent): void {
@@ -100,27 +89,6 @@ function onCardClick(event: MouseEvent): void {
   addLink(from, id);
 }
 
-/**
- * 点是否落在源便签原来的位置。
- *
- * 源便签在模式里是 `visibility: hidden` 的，那一片区域没有 DOM 可命中，
- * 点击会直接落到画布上、被当成"点空白退出"。用户的本意是点那张卡（它就在那儿），
- * 所以这一块要当"没点中任何东西"处理，而不是退出。
- */
-function insideSource(from: string, sx: number, sy: number): boolean {
-  const note = store.getNote(from);
-  if (!note) return false;
-  const { panX, panY, scale } = getViewport();
-  const left = note.x * scale + panX;
-  const top = note.y * scale + panY;
-  return (
-    sx >= left &&
-    sx <= left + note.width * scale &&
-    sy >= top &&
-    sy <= top + note.height * scale
-  );
-}
-
 function onBlankClick(event: MouseEvent): void {
   const from = getLinkingFrom();
   if (!from) return;
@@ -132,7 +100,6 @@ function onBlankClick(event: MouseEvent): void {
 
   const target = event.target;
   if (target instanceof Element && target.closest('.note')) return;
-  if (insideSource(from, event.clientX, event.clientY)) return;
   exitLinking();
 }
 
@@ -180,7 +147,7 @@ function onResize(): void {
 export function attachLinking(shell: AppShell): () => void {
   doc = shell.root.ownerDocument;
   win = doc.defaultView ?? window;
-  card = mountSourceCard(doc, () => exitLinking());
+  hud = mountLinkHud(shell, () => exitLinking());
 
   // capture：必须先于 interactions / noteLayer 的委托，否则卡片已经进了编辑态
   shell.noteLayer.addEventListener('click', onCardClick, true);
@@ -191,10 +158,13 @@ export function attachLinking(shell: AppShell): () => void {
   doc.addEventListener('keydown', onKeyDown, true);
   win.addEventListener('resize', onResize);
 
-  // 剔除会重建卡片元素（行内 visibility 跟着丢），每帧兜一次
+  // 剔除会重建卡片元素（class 跟着丢），每帧补一次
   const offFrame = onFrame(() => {
     const id = getLinkingFrom();
-    if (id) hideSource(id);
+    if (!id) return;
+    markSource(id);
+    const note = store.getNote(id);
+    if (note) hud?.frame(note);
   });
 
   const offNotes = store.subscribeNotes((_upserts, removed) => {
@@ -206,12 +176,14 @@ export function attachLinking(shell: AppShell): () => void {
       return;
     }
     const note = store.getNote(id);
-    if (note) card?.update(note);
+    if (note) hud?.update(note);
   });
 
   return () => {
     offFrame();
     offNotes();
+    hud?.dispose();
+    hud = null;
     shell.noteLayer.removeEventListener('click', onCardClick, true);
     shell.viewport.removeEventListener('click', onBlankClick, true);
     shell.viewport.removeEventListener('pointerdown', onPointerDown, true);
